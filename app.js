@@ -1,5 +1,5 @@
 
-const COLORS = {home:"#A5BCD6",budget:"#4A2E27",meals:"#F5EFC6",shopping:"#F5EFC6",agenda:"#4D0E12",cleaning:"#A5BCD6",profile:"#231815"};
+const COLORS = {home:"#A5BCD6",budget:"#4A2E27",meals:"#F5EFC6",shopping:"#F5EFC6",agenda:"#4D0E12",cleaning:"#A5BCD6",children:"#AAB8A0",profile:"#231815"};
 
 const defaults = {
   income: 2600,
@@ -14,6 +14,7 @@ const defaults = {
   savingsGoals: [],
   budgetCorrections: {},
   categoryCorrections: {},
+  children: [],
   mealIngredients: {},
   meals: {
     Maandag:{Ontbijt:"Overnight oats",Lunch:"Salade",Diner:"Pasta pesto"},
@@ -53,9 +54,11 @@ let profile = JSON.parse(localStorage.getItem("mijnLevenProfile") || "null") || 
   workDays:["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag"],
   diet:"Geen voorkeur",people:1,
   rooms:["Keuken","Woonkamer","Badkamer","Slaapkamer"],
-  cleaningLevel:"Normaal"
+  cleaningLevel:"Normaal",
+  childrenEnabled:false
 };
 if(profile.birthdate===undefined) profile.birthdate="";
+if(profile.childrenEnabled===undefined) profile.childrenEnabled=false;
 if(!Array.isArray(profile.workDays)) profile.workDays=["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag"];
 if(!Array.isArray(profile.rooms)) profile.rooms=["Keuken","Woonkamer","Badkamer","Slaapkamer"];
 let onboardIndex = 0;
@@ -162,6 +165,118 @@ function syncProfileCleaningSuggestions(){
   });
 }
 
+
+function normalizeChild(child,index=0){
+  return {
+    id:Number(child?.id)||Date.now()+index,
+    name:child?.name||`Kind ${index+1}`,
+    birthdate:child?.birthdate||"",
+    plans:Array.isArray(child?.plans)?child.plans:[],
+    foodLogs:Array.isArray(child?.foodLogs)?child.foodLogs:[],
+    carryItems:Array.isArray(child?.carryItems)?child.carryItems:[],
+    routines:Array.isArray(child?.routines)?child.routines:[],
+    notes:Array.isArray(child?.notes)?child.notes:[],
+    mealPlan:child?.mealPlan && typeof child.mealPlan==="object" ? child.mealPlan : {}
+  };
+}
+function childById(id){ return (state.children||[]).find(c=>Number(c.id)===Number(id)); }
+function selectedChild(){
+  const children=state.children||[];
+  if(!children.length) return null;
+  const saved=Number(localStorage.getItem("lumiSelectedChild")||0);
+  return childById(saved)||children[0];
+}
+function selectChild(id){ localStorage.setItem("lumiSelectedChild",String(id)); }
+function childAge(child){
+  if(!child?.birthdate) return "";
+  const b=dateObj(child.birthdate), n=new Date();
+  let years=n.getFullYear()-b.getFullYear();
+  let months=n.getMonth()-b.getMonth();
+  if(n.getDate()<b.getDate()) months--;
+  if(months<0){years--;months+=12;}
+  if(years<2) return `${Math.max(0,years*12+months)} maanden`;
+  return `${Math.max(0,years)} jaar`;
+}
+function nextDateForWeekday(dayName, from=new Date()){
+  const target=DAY_NAMES.indexOf(dayName);
+  const d=new Date(from.getFullYear(),from.getMonth(),from.getDate(),12);
+  const diff=(target-d.getDay()+7)%7;
+  d.setDate(d.getDate()+diff);
+  return isoLocal(d);
+}
+function childItemDueOn(item, iso=todayISO()){
+  if(item.date===iso) return true;
+  if(!item.repeatWeekly) return false;
+  return item.weekday===DAY_NAMES[dateObj(iso).getDay()];
+}
+function childPlansOn(child,iso){
+  return (child?.plans||[]).filter(p=>childItemDueOn(p,iso));
+}
+function childCarryOn(child,iso){
+  return (child?.carryItems||[]).filter(p=>childItemDueOn(p,iso));
+}
+function childRoutinesOn(child,iso){
+  const day=DAY_NAMES[dateObj(iso).getDay()];
+  return (child?.routines||[]).filter(r=>!(r.days||[]).length || (r.days||[]).includes(day));
+}
+function childFoodOn(child,iso){
+  return (child?.foodLogs||[]).filter(f=>f.date===iso);
+}
+function childMealForDay(child,dayName){
+  return child?.mealPlan?.[dayName]||"";
+}
+function childAgendaItemsForView(){
+  if(!profile.childrenEnabled) return [];
+  let start,end;
+  if(agendaView==="week"){
+    start=startOfWeek(agendaCursor); end=new Date(start.getFullYear(),start.getMonth(),start.getDate()+6,12);
+  }else if(agendaView==="month"){
+    start=new Date(agendaCursor.getFullYear(),agendaCursor.getMonth(),1,12);
+    end=new Date(agendaCursor.getFullYear(),agendaCursor.getMonth()+1,0,12);
+  }else{
+    start=new Date(agendaCursor.getFullYear(),0,1,12); end=new Date(agendaCursor.getFullYear(),11,31,12);
+  }
+  const items=[];
+  (state.children||[]).forEach(child=>{
+    for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+      const iso=isoLocal(d);
+      childPlansOn(child,iso).forEach(p=>items.push({
+        id:`child-${child.id}-${p.id}-${iso}`,
+        date:iso,
+        title:`${child.name}: ${p.title}`,
+        allDay:!!p.allDay,
+        startTime:p.allDay?"":(p.startTime||""),
+        endTime:p.allDay?"":(p.endTime||""),
+        childVirtual:true,
+        childId:child.id,
+        childPlanId:p.id,
+        location:p.location||""
+      }));
+    }
+  });
+  return items;
+}
+function ensureChildrenNav(){
+  const nav=document.querySelector(".bottom-nav");
+  if(!nav) return;
+  let btn=nav.querySelector('[data-page="children"]');
+  if(profile.childrenEnabled){
+    if(!btn){
+      btn=document.createElement("button");
+      btn.className="nav-item";
+      btn.dataset.page="children";
+      btn.innerHTML='<span class="nav-mark">K</span><small>Kinderen</small>';
+      const profileBtn=nav.querySelector('[data-page="profile"]');
+      nav.insertBefore(btn,profileBtn);
+      btn.onclick=()=>{currentPage="children";render();};
+    }
+  }else if(btn){
+    btn.remove();
+    if(currentPage==="children") currentPage="home";
+  }
+  nav.style.setProperty("--nav-count",String(nav.querySelectorAll(".nav-item").length));
+}
+
 function migrateState(){
   state.completedTasks=state.completedTasks||{};
   state.transactions=Array.isArray(state.transactions)?state.transactions:[];
@@ -208,6 +323,7 @@ function migrateState(){
 
   state.budgetCorrections=state.budgetCorrections && typeof state.budgetCorrections==="object" ? state.budgetCorrections : {};
   state.categoryCorrections=state.categoryCorrections && typeof state.categoryCorrections==="object" ? state.categoryCorrections : {};
+  state.children=Array.isArray(state.children)?state.children.map(normalizeChild):[];
   state.mealIngredients=state.mealIngredients && typeof state.mealIngredients==="object" ? state.mealIngredients : {};
   state.shopping=Array.isArray(state.shopping)?state.shopping:[];
   state.shopping=state.shopping.map((x,i)=>typeof x==="string"?{id:Date.now()+i,text:x,done:false}:{id:x.id||Date.now()+i,text:x.text||"",done:!!x.done});
@@ -242,12 +358,14 @@ function euro(n){ return new Intl.NumberFormat("nl-NL",{style:"currency",currenc
 function dateNL(d=new Date()){ return d.toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"}); }
 
 function render(){
-  document.documentElement.style.setProperty("--active", COLORS[currentPage]);
+  ensureChildrenNav();
+  document.documentElement.style.setProperty("--active", COLORS[currentPage]||COLORS.home);
   todayLabel.textContent = dateNL();
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage || (currentPage==="shopping" && b.dataset.page==="meals")));
-  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema",profile:"Profiel"};
-  pageTitle.textContent = titleMap[currentPage];
-  content.innerHTML = ({home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage,profile:profilePage})[currentPage]();
+  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema",children:"Kinderen",profile:"Profiel"};
+  pageTitle.textContent = titleMap[currentPage]||"Lumi";
+  const pages={home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage,children:childrenPage,profile:profilePage};
+  content.innerHTML = (pages[currentPage]||homePage)();
   bindPageEvents();
 }
 
@@ -258,6 +376,13 @@ function homePage(){
   const currentBudget=budgetTotals(today.slice(0,7));
   const dayMap={0:"Zondag",1:"Maandag",2:"Dinsdag",3:"Woensdag",4:"Donderdag",5:"Vrijdag",6:"Zaterdag"};
   const dinner = state.meals[dayMap[new Date().getDay()]]?.Diner || "Nog niet gepland";
+
+  const childrenToday=profile.childrenEnabled?(state.children||[]).map(child=>({
+    child,
+    plans:childPlansOn(child,today),
+    carry:childCarryOn(child,today)
+  })):[];
+
   const taskRow=(kind,id,title,sub,color)=>`<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"} ${isDone(kind,id)?"done":""}">
       <input class="task-check" type="checkbox" data-home-task="${kind}" data-task-id="${id}" ${isDone(kind,id)?"checked":""}>
       <div class="row-main"><strong>${title}</strong><small>${sub}</small></div>
@@ -279,12 +404,23 @@ function homePage(){
         <span class="go-label">Open lijst voor vandaag</span>
       </button>
     </div>
+    ${profile.childrenEnabled && childrenToday.length?`
+    <button class="click-card home-child-widget" data-go="children">
+      <small>Kinderen vandaag</small>
+      <strong>${childrenToday.map(x=>x.child.name).join(" · ")}</strong>
+      <span>${childrenToday.reduce((s,x)=>s+x.plans.length,0)} planning · ${childrenToday.reduce((s,x)=>s+x.carry.length,0)} mee te nemen</span>
+      <span class="go-label">Open kindoverzicht</span>
+    </button>`:""}
     <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-go="agenda">bekijk agenda</button></div>
     <div class="list">
       ${appts.map(a=>taskRow("agenda",a.id,`${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`} · ${a.title}`,"Agenda","#4D0E12")).join("")}
       ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd","#CDBB80")}
       ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,cleaningScheduleLabel(x),"#A5BCD6")).join("")}
-      ${!appts.length && !cleaningToday.length ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
+      ${childrenToday.map(({child,plans,carry})=>`
+        ${plans.map(p=>`<div class="row task-row home-task-child"><div class="row-main"><strong>${p.allDay?"Hele dag":p.startTime||""} · ${child.name}: ${p.title}</strong><small>${p.location||"Planning kind"}</small></div><span class="pill">Kind</span></div>`).join("")}
+        ${carry.map(x=>`<label class="row task-row home-task-child ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}"><input class="task-check" type="checkbox" data-home-child-carry="${child.id}|${x.id}" ${isDone("childcarry",`${child.id}-${x.id}`,today)?"checked":""}><div class="row-main"><strong>${child.name}: ${x.text}</strong><small>Meenemen</small></div><span class="pill">Kind</span></label>`).join("")}
+      `).join("")}
+      ${!appts.length && !cleaningToday.length && !childrenToday.some(x=>x.plans.length||x.carry.length) ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
     </div>
     <div class="section-title"><h3>Snel toevoegen</h3></div>
     <div class="fab-row">
@@ -293,6 +429,103 @@ function homePage(){
       <button class="action-btn" data-add="agenda">Afspraak</button>
       <button class="action-btn" data-add="shopping">Boodschap</button>
       <button class="action-btn" data-add="cleaning">Schoonmaak</button>
+    </div>`;
+}
+
+
+function childrenPage(){
+  const children=state.children||[];
+  const child=selectedChild();
+  if(!profile.childrenEnabled){
+    return `<div class="empty">De kinderfunctie staat uit. Je kunt hem inschakelen via Profiel.</div>`;
+  }
+  if(!child){
+    return `
+      <section class="hero children-hero"><h2>Mijn <span class="brand-script">kinderen</span></h2><p>Houd planning, eten, spullen en routines rustig bij.</p><div class="decor-letter">K</div></section>
+      <div class="card children-empty"><h3>Voeg je eerste kind toe</h3><p>Daarna maakt Lumi een persoonlijk dag- en weekoverzicht.</p><button class="primary" data-add-child-profiel>Kind toevoegen</button></div>`;
+  }
+  const today=todayISO(), dayName=DAY_NAMES[new Date().getDay()];
+  const plans=childPlansOn(child,today);
+  const carry=childCarryOn(child,today);
+  const routines=childRoutinesOn(child,today);
+  const food=childFoodOn(child,today);
+  const meal=childMealForDay(child,dayName);
+  const next7=[...Array(7)].map((_,i)=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+i);return d;});
+  const foodMoments=["Ontbijt","Tussendoor","Lunch","Tussendoor 2","Avondeten"];
+  return `
+    <section class="hero children-hero">
+      <h2>Voor <span class="brand-script">${child.name}</span></h2>
+      <p>${childAge(child)?childAge(child)+" · ":""}alles wat vandaag en deze week belangrijk is.</p>
+      <div class="decor-letter">K</div>
+    </section>
+
+    ${children.length>1?`<div class="child-switcher">${children.map(c=>`<button class="${c.id===child.id?"active":""}" data-select-child="${c.id}">${c.name}</button>`).join("")}</div>`:""}
+
+    <div class="card child-today-card">
+      <div class="section-title child-card-title"><h3>Vandaag voor ${child.name}</h3><span>${new Date().toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</span></div>
+      <div class="child-today-grid">
+        <div><small>Planning</small><strong>${plans.length?plans.map(p=>`${p.allDay?"Hele dag":p.startTime||""} ${p.title}`).join(" · "):"Geen afspraak"}</strong></div>
+        <div><small>Eten</small><strong>${food.length?`${food.length} moment(en) bijgehouden`:meal?`Gepland: ${meal}`:"Nog niets bijgehouden"}</strong></div>
+        <div><small>Meenemen</small><strong>${carry.length?carry.map(x=>x.text).join(" · "):"Niets extra"}</strong></div>
+        <div><small>Routine</small><strong>${routines.length?`${routines.filter(r=>isDone("childroutine",`${child.id}-${r.id}`,today)).length}/${routines.length} gedaan`:"Geen routine"}</strong></div>
+      </div>
+    </div>
+
+    <div class="section-title"><h3>Weekoverzicht</h3></div>
+    <div class="child-week-scroll">
+      <div class="child-week-grid">
+        ${next7.map(d=>{
+          const iso=isoLocal(d), dn=DAY_NAMES[d.getDay()], ps=childPlansOn(child,iso), cs=childCarryOn(child,iso);
+          return `<div class="child-week-day ${iso===today?"today":""}">
+            <strong>${d.toLocaleDateString("nl-NL",{weekday:"short",day:"numeric"})}</strong>
+            <span>${ps.length?ps.map(p=>p.title).join(", "):"—"}</span>
+            <small>${cs.length?"Mee: "+cs.map(c=>c.text).join(", "):""}</small>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+
+    <div class="section-title"><h3>Planning</h3><button class="link-btn" data-child-add="childPlan">Toevoegen</button></div>
+    <div class="list">
+      ${(child.plans||[]).length?(child.plans||[]).map(p=>`<div class="row child-plan-row">
+        <div class="row-main"><strong>${p.title}</strong><small>${p.repeatWeekly?p.weekday:new Date(p.date+"T12:00").toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})} · ${p.allDay?"Hele dag":`${p.startTime||""}${p.endTime?`–${p.endTime}`:""}`}${p.location?` · ${p.location}`:""}${p.dropoffBy?` · brengen: ${p.dropoffBy}`:""}${p.pickupBy?` · ophalen: ${p.pickupBy}`:""}</small></div>
+        <button class="link-btn" data-delete-child-item="plans|${p.id}">wis</button>
+      </div>`).join(""):`<div class="empty">Nog geen planning voor ${child.name}.</div>`}
+    </div>
+
+    <div class="section-title"><h3>Eten & drinken</h3><button class="link-btn" data-child-add="childFood">Eetmoment</button></div>
+    <div class="card child-meal-plan-card">
+      <div><small>Gepland avondeten vandaag</small><strong>${meal||"Nog niet gepland"}</strong></div>
+      <button class="link-btn" data-child-add="childMealPlan">Weekmenu kind</button>
+    </div>
+    <div class="list">
+      ${foodMoments.map(moment=>{
+        const f=food.find(x=>x.moment===moment);
+        return `<div class="row ${f?"":"child-food-empty"}"><div class="row-main"><strong>${moment}</strong><small>${f?`${f.food||"—"} · ${f.amount||"niet aangegeven"}${f.drink?` · drinken: ${f.drink}`:""}`:"Nog niet ingevuld"}</small></div>${f?`<button class="link-btn" data-delete-child-item="foodLogs|${f.id}">wis</button>`:""}</div>`;
+      }).join("")}
+    </div>
+    <button class="action-btn child-shopping-shortcut" data-child-shopping>Voor ${child.name} aan boodschappen toevoegen</button>
+
+    <div class="section-title"><h3>Meenemen</h3><button class="link-btn" data-child-add="childCarry">Item toevoegen</button></div>
+    <div class="list">
+      ${carry.length?carry.map(x=>`<label class="row task-row child-task ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}">
+        <input class="task-check" type="checkbox" data-child-carry-done="${x.id}" ${isDone("childcarry",`${child.id}-${x.id}`,today)?"checked":""}>
+        <div class="row-main"><strong>${x.text}</strong><small>${x.repeatWeekly?`Iedere ${x.weekday}`:"Vandaag"}</small></div>
+      </label>`).join(""):`<div class="empty">Voor vandaag hoef je niets extra mee te nemen.</div>`}
+      ${(child.carryItems||[]).filter(x=>!childItemDueOn(x,today)).slice(0,4).map(x=>`<div class="row"><div class="row-main"><strong>${x.text}</strong><small>${x.repeatWeekly?`Iedere ${x.weekday}`:new Date(x.date+"T12:00").toLocaleDateString("nl-NL",{day:"numeric",month:"short"})}</small></div><button class="link-btn" data-delete-child-item="carryItems|${x.id}">wis</button></div>`).join("")}
+    </div>
+
+    <div class="section-title"><h3>Routine</h3><button class="link-btn" data-child-add="childRoutine">Routine toevoegen</button></div>
+    <div class="list">
+      ${routines.length?routines.map(r=>`<label class="row task-row child-task ${isDone("childroutine",`${child.id}-${r.id}`,today)?"done":""}">
+        <input class="task-check" type="checkbox" data-child-routine-done="${r.id}" ${isDone("childroutine",`${child.id}-${r.id}`,today)?"checked":""}>
+        <div class="row-main"><strong>${r.title}</strong><small>${r.time||""}${(r.days||[]).length?` · ${(r.days||[]).join(", ")}`:" · iedere dag"}</small></div>
+      </label>`).join(""):`<div class="empty">Nog geen routines ingesteld.</div>`}
+    </div>
+
+    <div class="section-title"><h3>Notities</h3><button class="link-btn" data-child-add="childNote">Notitie</button></div>
+    <div class="list">
+      ${(child.notes||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,8).map(n=>`<div class="row child-note"><div class="row-main"><strong>${n.text}</strong><small>${new Date((n.date||today)+"T12:00").toLocaleDateString("nl-NL",{day:"numeric",month:"long"})}</small></div><button class="link-btn" data-delete-child-item="notes|${n.id}">wis</button></div>`).join("")||`<div class="empty">Nog geen notities.</div>`}
     </div>`;
 }
 
@@ -323,6 +556,21 @@ function profilePage(){
           <label>Eetvoorkeur
             <select id="profileDiet">${diets.map(x=>`<option ${profile.diet===x?"selected":""}>${x}</option>`).join("")}</select>
           </label>
+        </div>
+      </div>
+
+
+      <div class="section-title"><h3>Kinderen</h3></div>
+      <div class="card profile-card profile-children">
+        <label class="switch-line children-toggle-line">
+          <span><strong>Kinderen gebruiken</strong><small>Toon het tabblad Kinderen en het kindoverzicht op Vandaag.</small></span>
+          <input id="profileChildrenEnabled" type="checkbox" ${profile.childrenEnabled?"checked":""}>
+        </label>
+        <div id="profileChildrenPanel" class="${profile.childrenEnabled?"":"hidden"}">
+          <div class="profile-child-list">
+            ${(state.children||[]).map(c=>`<div class="profile-child-row"><span><strong>${c.name}</strong><small>${childAge(c)||"Geboortedatum niet ingevuld"}</small></span><div><button class="link-btn" type="button" data-edit-child-profile="${c.id}">bewerk</button><button class="link-btn" type="button" data-delete-child-profile="${c.id}">wis</button></div></div>`).join("")||`<p class="subtle">Nog geen kindprofiel toegevoegd.</p>`}
+          </div>
+          <button class="secondary" type="button" data-add-child-profiel>Kind toevoegen</button>
         </div>
       </div>
 
@@ -622,6 +870,7 @@ function mealsPage(){
           </div>
         </div>`).join("")}
     </div>
+    ${profile.childrenEnabled && (state.children||[]).length?`<div class="section-title"><h3>Kinderen</h3><button class="link-btn" data-go="children">open kindplanning</button></div><div class="card child-meals-summary">${(state.children||[]).map(c=>`<div><strong>${c.name}</strong><small>Vandaag: ${childMealForDay(c,todayName())||"nog niet apart gepland"}</small></div>`).join("")}</div>`:""}
     <div class="section-title"><h3>Boodschappenlijst</h3><button class="link-btn" data-add="shopping">＋ item</button></div>
     <div class="list">
       ${state.shopping.length?state.shopping.slice().sort((a,b)=>Number(a.done)-Number(b.done)).map((x)=>`<div class="row shopping-row ${x.done?"done":""}"><input class="task-check" type="checkbox" data-shopping-done="${x.id}" ${x.done?"checked":""}><div class="row-main"><strong>${shoppingItemText(x)}</strong></div><div class="shopping-actions"><button class="link-btn" data-edit-shopping="${x.id}">bewerk</button><button class="link-btn" data-remove-shopping="${x.id}">verwijder</button></div></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
@@ -646,7 +895,7 @@ function shoppingPage(){
 }
 
 function agendaPage(){
-  const items=[...state.agenda].sort((a,b)=>(a.date+(a.startTime||a.time||"00:00")).localeCompare(b.date+(b.startTime||b.time||"00:00")));
+  const items=[...state.agenda,...childAgendaItemsForView()].sort((a,b)=>(a.date+(a.startTime||a.time||"00:00")).localeCompare(b.date+(b.startTime||b.time||"00:00")));
   const fmtRange=a=>a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?` – ${a.endTime}`:""}`;
   const cursorLabel=agendaView==="year"
     ? String(agendaCursor.getFullYear())
@@ -680,11 +929,11 @@ function agendaPage(){
 
     <div class="section-title"><h3>Afspraken</h3><button class="link-btn" data-add="agenda">Afspraak toevoegen</button></div>
     <div class="list">
-      ${items.length?items.map(a=>`<div class="row task-row ${isDone("agenda",a.id,a.date)?"done":""}">
-        <input class="task-check" type="checkbox" data-agenda-done="${a.id}" data-agenda-date="${a.date}" ${isDone("agenda",a.id,a.date)?"checked":""}>
-        <div class="row-main"><strong>${a.title}</strong><small>${new Date(a.date+"T12:00").toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})} · ${fmtRange(a)}</small></div>
+      ${items.length?items.map(a=>`<div class="row task-row ${a.childVirtual?"child-agenda-row":isDone("agenda",a.id,a.date)?"done":""}">
+        ${a.childVirtual?`<span class="child-agenda-mark">K</span>`:`<input class="task-check" type="checkbox" data-agenda-done="${a.id}" data-agenda-date="${a.date}" ${isDone("agenda",a.id,a.date)?"checked":""}>`}
+        <div class="row-main"><strong>${a.title}</strong><small>${new Date(a.date+"T12:00").toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})} · ${fmtRange(a)}${a.location?` · ${a.location}`:""}</small></div>
         ${a.allDay?`<span class="all-day-chip">Hele dag</span>`:""}
-        <button class="link-btn" data-delete-agenda="${a.id}">wis</button>
+        ${a.childVirtual?`<button class="link-btn" data-go-child="${a.childId}">kind</button>`:`<button class="link-btn" data-delete-agenda="${a.id}">wis</button>`}
       </div>`).join(""):`<div class="empty">Nog geen afspraken.</div>`}
     </div>`;
 }
@@ -819,6 +1068,7 @@ function bindPageEvents(){
       profile.birthdate=document.getElementById("profileBirthdate").value;
       profile.people=Math.max(1,Number(document.getElementById("profilePeople").value||1));
       profile.diet=document.getElementById("profileDiet").value;
+      profile.childrenEnabled=!!document.getElementById("profileChildrenEnabled")?.checked;
       profile.income=Math.max(0,Number(document.getElementById("profileIncome").value||0));
       profile.fixed=Math.max(0,Number(document.getElementById("profileFixed").value||0));
       profile.savingsGoal=Math.max(0,Number(document.getElementById("profileSavings").value||0));
@@ -838,6 +1088,49 @@ function bindPageEvents(){
       }
     };
   }
+
+
+  const childToggle=document.getElementById("profileChildrenEnabled");
+  if(childToggle){
+    const panel=document.getElementById("profileChildrenPanel");
+    childToggle.onchange=()=>{
+      profile.childrenEnabled=childToggle.checked;
+      if(panel) panel.classList.toggle("hidden",!childToggle.checked);
+      saveProfile(); ensureChildrenNav();
+    };
+  }
+  document.querySelectorAll("[data-add-child-profiel]").forEach(b=>b.onclick=()=>openModal("childProfile"));
+  document.querySelectorAll("[data-edit-child-profile]").forEach(b=>b.onclick=()=>openModal("childProfile",Number(b.dataset.editChildProfile)));
+  document.querySelectorAll("[data-delete-child-profile]").forEach(b=>b.onclick=()=>{
+    const id=Number(b.dataset.deleteChildProfile), c=childById(id);
+    if(c && confirm(`Kindprofiel van ${c.name} verwijderen?`)){
+      state.children=state.children.filter(x=>Number(x.id)!==id);
+      save(); render();
+    }
+  });
+  document.querySelectorAll("[data-select-child]").forEach(b=>b.onclick=()=>{selectChild(Number(b.dataset.selectChild));render();});
+  document.querySelectorAll("[data-child-add]").forEach(b=>b.onclick=()=>openModal(b.dataset.childAdd));
+  document.querySelectorAll("[data-child-shopping]").forEach(b=>b.onclick=()=>openModal("shopping"));
+  document.querySelectorAll("[data-go-child]").forEach(b=>b.onclick=()=>{selectChild(Number(b.dataset.goChild));currentPage="children";render();});
+  document.querySelectorAll("[data-delete-child-item]").forEach(b=>b.onclick=()=>{
+    const c=selectedChild(); if(!c)return;
+    const [collection,idRaw]=b.dataset.deleteChildItem.split("|");
+    const id=Number(idRaw);
+    c[collection]=(c[collection]||[]).filter(x=>Number(x.id)!==id);
+    save();render();
+  });
+  document.querySelectorAll("[data-child-carry-done]").forEach(cbox=>cbox.onchange=()=>{
+    const c=selectedChild(); if(!c)return;
+    setDone("childcarry",`${c.id}-${cbox.dataset.childCarryDone}`,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-child-routine-done]").forEach(cbox=>cbox.onchange=()=>{
+    const c=selectedChild(); if(!c)return;
+    setDone("childroutine",`${c.id}-${cbox.dataset.childRoutineDone}`,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-home-child-carry]").forEach(cbox=>cbox.onchange=()=>{
+    const [childId,itemId]=cbox.dataset.homeChildCarry.split("|");
+    setDone("childcarry",`${childId}-${itemId}`,cbox.checked); render();
+  });
 
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));
   document.querySelectorAll("[data-agenda-view]").forEach(b=>b.onclick=()=>{
@@ -904,6 +1197,19 @@ function bindPageEvents(){
 
 function openModal(type, catIndex=null){
   const fields={
+    childProfile:{title:Number(catIndex)?"Kind bewerken":"Kind toevoegen",html:(()=>{
+      const c=childById(catIndex);
+      return `<div class="form-grid"><label>Naam<input id="fChildName" value="${c?.name||""}" placeholder="Voornaam"></label><label>Geboortedatum<input id="fChildBirthdate" type="date" value="${c?.birthdate||""}"></label></div>`;
+    })()},
+    childPlan:{title:"Planning kind toevoegen",html:`<div class="form-grid"><label>Wat staat er gepland?<input id="fChildPlanTitle" placeholder="Bijv. opvang, zwemles, opa en oma"></label><label>Datum<input id="fChildPlanDate" type="date" value="${todayISO()}"></label><label class="switch-line"><input id="fChildPlanRepeat" type="checkbox"> Iedere week herhalen</label><label class="switch-line"><input id="fChildPlanAllDay" type="checkbox"> Hele dag</label><div class="time-row" id="childPlanTimes"><label>Begintijd<input id="fChildPlanStart" type="time" value="08:30"></label><label>Eindtijd<input id="fChildPlanEnd" type="time" value="17:00"></label></div><label>Locatie<input id="fChildPlanLocation" placeholder="Bijv. opvang"></label><label>Brengen door<input id="fChildDropoff" placeholder="Bijv. mama"></label><label>Ophalen door<input id="fChildPickup" placeholder="Bijv. papa"></label></div>`},
+    childFood:{title:"Eten & drinken bijhouden",html:`<div class="form-grid"><label>Datum<input id="fChildFoodDate" type="date" value="${todayISO()}"></label><label>Moment<select id="fChildFoodMoment"><option>Ontbijt</option><option>Tussendoor</option><option>Lunch</option><option>Tussendoor 2</option><option>Avondeten</option></select></label><label>Wat gegeten?<input id="fChildFood" placeholder="Bijv. banaan en yoghurt"></label><label>Hoeveel?<select id="fChildFoodAmount"><option>Alles</option><option>Beetje</option><option>Niet</option></select></label><label>Drinken<input id="fChildDrink" placeholder="Bijv. water, melk"></label></div>`},
+    childCarry:{title:"Meenemen toevoegen",html:`<div class="form-grid"><label>Wat moet mee?<input id="fChildCarryText" placeholder="Bijv. gymtas, drinkbeker"></label><label>Datum<input id="fChildCarryDate" type="date" value="${todayISO()}"></label><label class="switch-line"><input id="fChildCarryRepeat" type="checkbox"> Iedere week op deze dag</label></div>`},
+    childRoutine:{title:"Routine toevoegen",html:`<div class="form-grid"><label>Routine<input id="fChildRoutineTitle" placeholder="Bijv. tandenpoetsen, vitamine, voorlezen"></label><label>Tijd<input id="fChildRoutineTime" type="time" value="19:00"></label><p class="subtle">Op welke dagen?</p><div class="choice-grid">${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"].map(d=>`<label class="choice"><input type="checkbox" name="childRoutineDay" value="${d}" checked>${d}</label>`).join("")}</div></div>`},
+    childNote:{title:"Notitie toevoegen",html:`<div class="form-grid"><label>Datum<input id="fChildNoteDate" type="date" value="${todayISO()}"></label><label>Notitie<textarea id="fChildNoteText" rows="4" placeholder="Bijv. vond mango heel lekker"></textarea></label></div>`},
+    childMealPlan:{title:"Weekmenu kind",html:(()=>{
+      const c=selectedChild();
+      return `<div class="form-grid">${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"].map(d=>`<label>${d}<input data-child-meal-day="${d}" value="${c?childMealForDay(c,d):""}" placeholder="Apart eten of zelfde als jullie"></label>`).join("")}</div>`;
+    })()},
     expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Omschrijving<input id="fExpenseLabel" placeholder="Bijv. supermarkt"></label><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label><label>Datum<input id="fExpenseDate" type="date" value="${budgetMonth===todayISO().slice(0,7)?todayISO():budgetMonth+"-01"}"></label></div>`},
     agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid">
       <label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label>
@@ -1072,6 +1378,13 @@ function openModal(type, catIndex=null){
     syncMealFields();
   }
 
+  if(type==="childPlan"){
+    const allDay=document.getElementById("fChildPlanAllDay");
+    const times=document.getElementById("childPlanTimes");
+    const sync=()=>times.classList.toggle("hidden",allDay.checked);
+    allDay.addEventListener("change",sync); sync();
+  }
+
   if(type==="agenda" || type==="agendaEdit"){
     const allDay=document.getElementById("fAllDay");
     const timeFields=document.getElementById("timeFields");
@@ -1122,6 +1435,59 @@ function openModal(type, catIndex=null){
 document.getElementById("modalForm").addEventListener("submit",e=>{
   e.preventDefault();
   const t=modal.dataset.type;
+  if(t==="childProfile"){
+    const name=document.getElementById("fChildName").value.trim();
+    if(!name){ alert("Vul een naam in."); return; }
+    const existing=childById(modal.dataset.editId);
+    if(existing){
+      existing.name=name; existing.birthdate=document.getElementById("fChildBirthdate").value;
+    }else{
+      const c=normalizeChild({id:Date.now(),name,birthdate:document.getElementById("fChildBirthdate").value},0);
+      state.children.push(c); selectChild(c.id); profile.childrenEnabled=true; saveProfile();
+    }
+  }
+  if(t==="childPlan"){
+    const c=selectedChild(); if(!c){alert("Voeg eerst een kind toe.");return;}
+    const date=document.getElementById("fChildPlanDate").value||todayISO();
+    const repeatWeekly=document.getElementById("fChildPlanRepeat").checked;
+    const allDay=document.getElementById("fChildPlanAllDay").checked;
+    const start=document.getElementById("fChildPlanStart").value;
+    const end=document.getElementById("fChildPlanEnd").value;
+    if(!allDay && start && end && end<=start){alert("De eindtijd moet na de begintijd liggen.");return;}
+    c.plans.push({id:Date.now(),title:document.getElementById("fChildPlanTitle").value.trim()||"Planning",date,weekday:DAY_NAMES[dateObj(date).getDay()],repeatWeekly,allDay,startTime:allDay?"":start,endTime:allDay?"":end,location:document.getElementById("fChildPlanLocation").value.trim(),dropoffBy:document.getElementById("fChildDropoff").value.trim(),pickupBy:document.getElementById("fChildPickup").value.trim()});
+  }
+  if(t==="childFood"){
+    const c=selectedChild(); if(!c)return;
+    const date=document.getElementById("fChildFoodDate").value||todayISO();
+    const moment=document.getElementById("fChildFoodMoment").value;
+    c.foodLogs=c.foodLogs.filter(x=>!(x.date===date && x.moment===moment));
+    c.foodLogs.push({id:Date.now(),date,moment,food:document.getElementById("fChildFood").value.trim(),amount:document.getElementById("fChildFoodAmount").value,drink:document.getElementById("fChildDrink").value.trim()});
+  }
+  if(t==="childCarry"){
+    const c=selectedChild(); if(!c)return;
+    const text=document.getElementById("fChildCarryText").value.trim();
+    if(!text){alert("Vul in wat er mee moet.");return;}
+    const date=document.getElementById("fChildCarryDate").value||todayISO();
+    c.carryItems.push({id:Date.now(),text,date,weekday:DAY_NAMES[dateObj(date).getDay()],repeatWeekly:document.getElementById("fChildCarryRepeat").checked});
+  }
+  if(t==="childRoutine"){
+    const c=selectedChild(); if(!c)return;
+    const title=document.getElementById("fChildRoutineTitle").value.trim();
+    if(!title){alert("Vul een routine in.");return;}
+    c.routines.push({id:Date.now(),title,time:document.getElementById("fChildRoutineTime").value,days:[...document.querySelectorAll('input[name="childRoutineDay"]:checked')].map(x=>x.value)});
+  }
+  if(t==="childNote"){
+    const c=selectedChild(); if(!c)return;
+    const text=document.getElementById("fChildNoteText").value.trim();
+    if(!text){alert("Vul een notitie in.");return;}
+    c.notes.push({id:Date.now(),date:document.getElementById("fChildNoteDate").value||todayISO(),text});
+  }
+  if(t==="childMealPlan"){
+    const c=selectedChild(); if(!c)return;
+    c.mealPlan=c.mealPlan||{};
+    document.querySelectorAll("[data-child-meal-day]").forEach(inp=>{c.mealPlan[inp.dataset.childMealDay]=inp.value.trim();});
+  }
+
   if(t==="expense"){
     const i=Number(document.getElementById("fCat").value);
     const category=state.budgets[i]?.name||"Overig";

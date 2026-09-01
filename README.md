@@ -17,3 +17,18 @@ In deze versie zijn de eerder besproken verbeterpunten verwerkt.
 
 ## Belangrijk
 De back-upfunctie bewaart zowel je profiel als je Lumi-data. Bewaar het JSON-bestand op een veilige plek.
+
+
+## Kinderen-tab
+- Via Profiel kun je Kinderen aan/uit zetten; het tabblad verschijnt alleen wanneer de functie aan staat.
+- Meerdere kindprofielen met naam en geboortedatum.
+- Vandaag-overzicht per kind.
+- Herhalende weekplanning met tijden, locatie, brengen en ophalen.
+- Kinderplanning verschijnt ook in Agenda en Vandaag.
+- Eten & drinken per eetmoment met hoeveelheid.
+- Apart weekmenu voor een kind, gekoppeld aan de maaltijdplanner.
+- Meenemen-checklist met wekelijkse herhaling.
+- Dagelijkse/wekelijkse routines met afvinken.
+- Notities.
+- Weekoverzicht.
+- Direct boodschappen toevoegen vanuit Kinderen.
