@@ -1,5 +1,5 @@
 
-const COLORS = {home:"#3154c7",budget:"#55a83d",meals:"#e77b12",agenda:"#7d48d6",cleaning:"#efb400"};
+const COLORS = {home:"#3154c7",budget:"#55a83d",meals:"#e77b12",agenda:"#7d48d6",cleaning:"#A5BCD6"};
 
 const defaults = {
   income: 2600,
@@ -45,9 +45,49 @@ let profile = JSON.parse(localStorage.getItem("mijnLevenProfile") || "null") || 
   cleaningLevel:"Normaal"
 };
 let onboardIndex = 0;
+let agendaView = localStorage.getItem("lumiAgendaView") || "week";
+let agendaCursor = new Date();
 const DAY_NAMES=["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function todayName(){ return DAY_NAMES[new Date().getDay()]; }
+function dateParts(iso){ const [y,m,d]=iso.split("-").map(Number); return {y,m,d}; }
+function dateObj(iso){ const p=dateParts(iso); return new Date(p.y,p.m-1,p.d,12,0,0); }
+function isoLocal(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function startOfWeek(d){
+  const x=new Date(d.getFullYear(),d.getMonth(),d.getDate(),12);
+  const mondayOffset=(x.getDay()+6)%7;
+  x.setDate(x.getDate()-mondayOffset);
+  return x;
+}
+function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
+function cleanDueOn(task, d=new Date()){
+  const iso=isoLocal(d);
+  const weekday=DAY_NAMES[d.getDay()];
+  if(task.repeatType==="monthly"){
+    const days=(task.monthDays||[]).map(Number);
+    return days.includes(d.getDate());
+  }
+  if(task.repeatType==="monthlyNth"){
+    const targetWeekday=task.weekday || "Zaterdag";
+    const nths=(task.nths||[]).map(Number);
+    if(weekday!==targetWeekday) return false;
+    const nth=Math.floor((d.getDate()-1)/7)+1;
+    return nths.includes(nth);
+  }
+  return (task.days||[]).includes(weekday);
+}
+function cleaningScheduleLabel(task){
+  if(task.repeatType==="monthly"){
+    const ds=(task.monthDays||[]).join(" en ");
+    return ds ? `${ds} van de maand` : "Maandelijks";
+  }
+  if(task.repeatType==="monthlyNth"){
+    const labels={1:"1e",2:"2e",3:"3e",4:"4e",5:"5e"};
+    return (task.nths||[]).map(n=>labels[n]).join(" en ")+" "+(task.weekday||"Zaterdag")+" van de maand";
+  }
+  return (task.days||[]).join(" · ");
+}
+
 function taskKey(kind,id,date=todayISO()){ return `${kind}:${id}:${date}`; }
 function isDone(kind,id,date=todayISO()){ return !!(state.completedTasks||{})[taskKey(kind,id,date)]; }
 function setDone(kind,id,done,date=todayISO()){
@@ -58,9 +98,16 @@ function setDone(kind,id,done,date=todayISO()){
 function migrateState(){
   state.completedTasks=state.completedTasks||{};
   state.transactions=state.transactions||[];
+  state.agenda=state.agenda||[];
+  state.agenda.forEach(a=>{
+    if(a.allDay===undefined) a.allDay=false;
+    if(!a.startTime && a.time) a.startTime=a.time;
+    if(a.endTime===undefined) a.endTime="";
+  });
   state.cleaning=state.cleaning||[];
   state.cleaning.forEach((x,i)=>{
     x.id=x.id||Date.now()+i;
+    if(!x.repeatType) x.repeatType="weekly";
     if(!Array.isArray(x.days)){
       const defaultsByFreq={"Dagelijks":["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"],"2× per week":["Dinsdag","Vrijdag"],"Wekelijks":["Zaterdag"],"Elke 2 weken":["Zaterdag"],"Maandelijks":["Zaterdag"]};
       x.days=defaultsByFreq[x.freq]||["Zaterdag"];
@@ -97,16 +144,16 @@ function render(){
   document.documentElement.style.setProperty("--active", COLORS[currentPage]);
   todayLabel.textContent = dateNL();
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage));
-  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",agenda:"Agenda",cleaning:"Schoonmaakschema"};
+  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema"};
   pageTitle.textContent = titleMap[currentPage];
-  content.innerHTML = ({home:homePage,budget:budgetPage,meals:mealsPage,agenda:agendaPage,cleaning:cleaningPage})[currentPage]();
+  content.innerHTML = ({home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage})[currentPage]();
   bindPageEvents();
 }
 
 function homePage(){
   const today = todayISO();
-  const appts = state.agenda.filter(a=>a.date===today).sort((a,b)=>a.time.localeCompare(b.time));
-  const cleaningToday = state.cleaning.filter(x=>(x.days||[]).includes(todayName()));
+  const appts = state.agenda.filter(a=>a.date===today).sort((a,b)=>(a.startTime||"00:00").localeCompare(b.startTime||"00:00"));
+  const cleaningToday = state.cleaning.filter(x=>cleanDueOn(x,new Date()));
   const budgetSpent = state.budgets.reduce((s,x)=>s+x.spent,0);
   const budgetTotal = state.budgets.reduce((s,x)=>s+x.limit,0);
   const dayMap={0:"Zondag",1:"Maandag",2:"Dinsdag",3:"Woensdag",4:"Donderdag",5:"Vrijdag",6:"Zaterdag"};
@@ -123,14 +170,20 @@ function homePage(){
       <div class="decor-letter">L</div>
     </section>
     <div class="grid2">
-      <div class="stat"><small>Budget deze maand</small><strong>${euro(budgetTotal-budgetSpent)}</strong><small>nog beschikbaar</small></div>
-      <div class="stat"><small>Boodschappenlijst</small><strong>${state.shopping.length}</strong><small>artikelen</small></div>
+      <button class="click-card" data-go="budget">
+        <small>Budget deze maand</small><strong style="display:block;font-size:22px;margin-top:4px">${euro(budgetTotal-budgetSpent)}</strong>
+        <span class="go-label">Bekijk budget</span>
+      </button>
+      <button class="click-card" data-go="shopping">
+        <small>Boodschappenlijst</small><strong style="display:block;font-size:22px;margin-top:4px">${state.shopping.length} artikelen</strong>
+        <span class="go-label">Open lijst voor vandaag</span>
+      </button>
     </div>
     <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-go="agenda">bekijk agenda</button></div>
     <div class="list">
-      ${appts.map(a=>taskRow("agenda",a.id,`${a.time} · ${a.title}`,"Agenda","#7d48d6")).join("")}
-      ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd","#e77b12")}
-      ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,(x.days||[]).join(", "),"#efb400")).join("")}
+      ${appts.map(a=>taskRow("agenda",a.id,`${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`} · ${a.title}`,"Agenda","#4D0E12")).join("")}
+      ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd","#CDBB80")}
+      ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,cleaningScheduleLabel(x),"#A5BCD6")).join("")}
       ${!appts.length && !cleaningToday.length ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
     </div>
     <div class="section-title"><h3>Snel toevoegen</h3></div>
@@ -185,7 +238,7 @@ function budgetChart(){
     const x0=34+i*86, ih=(x.income/max)*125, eh=(x.expense/max)*125;
     return `<rect class="chart-income" x="${x0}" y="${base-ih}" width="${bar}" height="${ih}" rx="5"/><rect class="chart-expense" x="${x0+21}" y="${base-eh}" width="${bar}" height="${eh}" rx="5"/><text class="chart-label" x="${x0+18}" y="181" text-anchor="middle">${x.label}</text>`;
   }).join("");
-  return `<div class="card chart-card"><div class="section-title"><h3>Inkomsten en uitgaven</h3><span class="pill">6 maanden</span></div><div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafiek inkomsten en uitgaven"><line class="chart-grid" x1="24" y1="160" x2="548" y2="160"/>${bars}</svg></div><div class="chart-legend"><span><i class="legend-dot" style="background:#55a83d"></i>Inkomsten</span><span><i class="legend-dot" style="background:#d6a23a"></i>Uitgaven</span></div></div>`;
+  return `<div class="card chart-card"><div class="section-title"><h3>Inkomsten en uitgaven</h3><span class="pill">6 maanden</span></div><div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafiek inkomsten en uitgaven"><line class="chart-grid" x1="24" y1="160" x2="548" y2="160"/>${bars}</svg></div><div class="chart-legend"><span><i class="legend-dot" style="background:#F5EFC6"></i>Inkomsten</span><span><i class="legend-dot" style="background:#4D0E12"></i>Uitgaven</span></div></div>`;
 }
 
 function mealsPage(){
@@ -211,27 +264,106 @@ function mealsPage(){
     </div>`;
 }
 
+function shoppingPage(){
+  return `
+    <section class="hero theme-orange">
+      <h2>Boodschappen<span class="brand-script">lijst</span></h2>
+      <p>${state.shopping.length} artikelen voor vandaag.</p>
+      <div class="decor-letter">B</div>
+    </section>
+    <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-add="shopping">Item toevoegen</button></div>
+    <div class="list">
+      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je boodschappenlijst is leeg.</div>`}
+    </div>
+    <div class="fab-row"><button class="action-btn" data-go="meals">Terug naar maaltijdplanner</button></div>`;
+}
+
 function agendaPage(){
-  const d=new Date(); const days=[...Array(7)].map((_,i)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+i));
-  const items=[...state.agenda].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  const items=[...state.agenda].sort((a,b)=>(a.date+(a.startTime||a.time||"00:00")).localeCompare(b.date+(b.startTime||b.time||"00:00")));
+  const fmtRange=a=>a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?` – ${a.endTime}`:""}`;
+  const cursorLabel=agendaView==="year"
+    ? String(agendaCursor.getFullYear())
+    : agendaView==="month"
+      ? agendaCursor.toLocaleDateString("nl-NL",{month:"long",year:"numeric"})
+      : `${startOfWeek(agendaCursor).toLocaleDateString("nl-NL",{day:"numeric",month:"short"})} – ${new Date(startOfWeek(agendaCursor).getFullYear(),startOfWeek(agendaCursor).getMonth(),startOfWeek(agendaCursor).getDate()+6).toLocaleDateString("nl-NL",{day:"numeric",month:"short"})}`;
+
   return `
     <section class="hero theme-purple">
       <h2>Mijn <span class="brand-script">agenda</span></h2>
-      <p>Afspraken en taken zonder overvolle kalender.</p>
+      <p>Bekijk je planning per week, maand of jaar.</p>
       <div class="decor-letter">A</div>
     </section>
-    <div class="calendar-strip">
-      ${days.map((x,i)=>`<div class="date-cell ${i===0?"active":""}"><small>${x.toLocaleDateString("nl-NL",{weekday:"short"}).slice(0,2)}</small><strong>${x.getDate()}</strong></div>`).join("")}
+
+    <div class="segmented" aria-label="Agendaweergave">
+      <button data-agenda-view="week" class="${agendaView==="week"?"active":""}">Week</button>
+      <button data-agenda-view="month" class="${agendaView==="month"?"active":""}">Maand</button>
+      <button data-agenda-view="year" class="${agendaView==="year"?"active":""}">Jaar</button>
     </div>
-    <div class="section-title"><h3>Komende afspraken</h3><button class="link-btn" data-add="agenda">＋ afspraak</button></div>
+
+    <div class="calendar-head">
+      <h3>${cursorLabel}</h3>
+      <div class="cal-nav">
+        <button data-cal-nav="-1" aria-label="Vorige periode">‹</button>
+        <button data-cal-today="1">Vandaag</button>
+        <button data-cal-nav="1" aria-label="Volgende periode">›</button>
+      </div>
+    </div>
+
+    ${agendaCalendarView(items)}
+
+    <div class="section-title"><h3>Afspraken</h3><button class="link-btn" data-add="agenda">Afspraak toevoegen</button></div>
     <div class="list">
-      ${items.length?items.map(a=>`<div class="row task-row ${isDone("agenda",a.id,a.date)?"done":""}"><input class="task-check" type="checkbox" data-agenda-done="${a.id}" data-agenda-date="${a.date}" ${isDone("agenda",a.id,a.date)?"checked":""}><div class="row-main"><strong>${a.title}</strong><small>${new Date(a.date+"T12:00").toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})} · ${a.time}</small></div><button class="link-btn" data-delete-agenda="${a.id}">wis</button></div>`).join(""):`<div class="empty">Nog geen afspraken.</div>`}
+      ${items.length?items.map(a=>`<div class="row task-row ${isDone("agenda",a.id,a.date)?"done":""}">
+        <input class="task-check" type="checkbox" data-agenda-done="${a.id}" data-agenda-date="${a.date}" ${isDone("agenda",a.id,a.date)?"checked":""}>
+        <div class="row-main"><strong>${a.title}</strong><small>${new Date(a.date+"T12:00").toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})} · ${fmtRange(a)}</small></div>
+        ${a.allDay?`<span class="all-day-chip">Hele dag</span>`:""}
+        <button class="link-btn" data-delete-agenda="${a.id}">wis</button>
+      </div>`).join(""):`<div class="empty">Nog geen afspraken.</div>`}
     </div>`;
 }
 
+function agendaCalendarView(items){
+  if(agendaView==="week"){
+    const start=startOfWeek(agendaCursor);
+    const days=[...Array(7)].map((_,i)=>new Date(start.getFullYear(),start.getMonth(),start.getDate()+i,12));
+    return `<div class="week-grid">${days.map(d=>{
+      const iso=isoLocal(d), ev=items.filter(a=>a.date===iso);
+      return `<div class="week-day ${iso===todayISO()?"today":""}">
+        <h4>${d.toLocaleDateString("nl-NL",{weekday:"short",day:"numeric"})}</h4>
+        ${ev.length?ev.map(a=>`<div class="week-event"><strong>${a.title}</strong><br><span>${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`}</span></div>`).join(""):`<span class="subtle">—</span>`}
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  if(agendaView==="month"){
+    const y=agendaCursor.getFullYear(), m=agendaCursor.getMonth();
+    const first=new Date(y,m,1,12), offset=(first.getDay()+6)%7;
+    const cells=[...Array(42)].map((_,i)=>new Date(y,m,1-offset+i,12));
+    return `<div class="month-grid">
+      ${["Ma","Di","Wo","Do","Vr","Za","Zo"].map(x=>`<div class="dow">${x}</div>`).join("")}
+      ${cells.map(d=>{
+        const iso=isoLocal(d), ev=items.filter(a=>a.date===iso);
+        return `<div class="month-cell ${d.getMonth()!==m?"outside":""} ${iso===todayISO()?"today":""}">
+          <span class="num">${d.getDate()}</span>
+          ${ev.slice(0,2).map(a=>`<span class="month-event">${a.allDay?"Hele dag":(a.startTime||a.time||"")} ${a.title}</span>`).join("")}
+          ${ev.length>2?`<span class="month-event">+${ev.length-2} meer</span>`:""}
+        </div>`;
+      }).join("")}
+    </div>`;
+  }
+
+  const y=agendaCursor.getFullYear();
+  return `<div class="year-grid">${[...Array(12)].map((_,m)=>{
+    const ev=items.filter(a=>dateObj(a.date).getFullYear()===y && dateObj(a.date).getMonth()===m);
+    return `<div class="year-month"><strong>${new Date(y,m,1).toLocaleDateString("nl-NL",{month:"long"})}</strong>
+      <span class="subtle">${ev.length} ${ev.length===1?"afspraak":"afspraken"}</span>
+      <div class="year-dots" aria-hidden="true">${ev.slice(0,24).map(()=>`<span class="year-dot"></span>`).join("")}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
 function cleaningPage(){
-  const today=todayName();
-  const due=state.cleaning.filter(x=>(x.days||[]).includes(today));
+  const due=state.cleaning.filter(x=>cleanDueOn(x,new Date()));
   const done=due.filter(x=>isDone("clean",x.id)).length;
   return `
     <section class="hero theme-yellow">
@@ -243,8 +375,8 @@ function cleaningPage(){
     <div class="list">
       ${state.cleaning.map(x=>`<div class="row cleaning-task task-row ${isDone("clean",x.id)?"done":""}">
         <input class="task-check" type="checkbox" data-clean="${x.id}" ${isDone("clean",x.id)?"checked":""}>
-        <div class="row-main"><strong>${x.task}</strong><small>${(x.days||[]).join(" · ")}</small></div>
-        <button class="link-btn" data-edit-clean="${x.id}">dagen</button>
+        <div class="row-main"><strong>${x.task}</strong><small>${cleaningScheduleLabel(x)}</small></div>
+        <button class="link-btn" data-edit-clean="${x.id}">planning</button>
       </div>`).join("")}
     </div>`;
 }
@@ -252,6 +384,20 @@ function row(color,icon,title,sub){return `<div class="row"><span style="width:5
 
 function bindPageEvents(){
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));
+  document.querySelectorAll("[data-agenda-view]").forEach(b=>b.onclick=()=>{
+    agendaView=b.dataset.agendaView;
+    localStorage.setItem("lumiAgendaView",agendaView);
+    render();
+  });
+  document.querySelectorAll("[data-cal-today]").forEach(b=>b.onclick=()=>{agendaCursor=new Date();render();});
+  document.querySelectorAll("[data-cal-nav]").forEach(b=>b.onclick=()=>{
+    const dir=Number(b.dataset.calNav);
+    if(agendaView==="week") agendaCursor=new Date(agendaCursor.getFullYear(),agendaCursor.getMonth(),agendaCursor.getDate()+7*dir,12);
+    if(agendaView==="month") agendaCursor=new Date(agendaCursor.getFullYear(),agendaCursor.getMonth()+dir,1,12);
+    if(agendaView==="year") agendaCursor=new Date(agendaCursor.getFullYear()+dir,0,1,12);
+    render();
+  });
+
   document.querySelectorAll("[data-home-task]").forEach(c=>c.onchange=()=>{setDone(c.dataset.homeTask,c.dataset.taskId,c.checked);render();});
   document.querySelectorAll("[data-agenda-done]").forEach(c=>c.onchange=()=>{setDone("agenda",c.dataset.agendaDone,c.checked,c.dataset.agendaDate);render();});
   document.querySelectorAll("[data-edit-clean]").forEach(b=>b.onclick=()=>openModal("cleanDays",Number(b.dataset.editClean)));
@@ -267,24 +413,92 @@ function bindPageEvents(){
 function openModal(type, catIndex=null){
   const fields={
     expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label></div>`},
-    agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid"><label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label><label>Datum<input id="fDate" type="date" value="${new Date().toISOString().slice(0,10)}"></label><label>Tijd<input id="fTime" type="time" value="09:00"></label></div>`},
+    agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid">
+      <label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label>
+      <label>Datum<input id="fDate" type="date" value="${todayISO()}"></label>
+      <label class="switch-line"><input id="fAllDay" type="checkbox"> Hele dag</label>
+      <div class="time-row" id="timeFields">
+        <label>Begintijd<input id="fStartTime" type="time" value="09:00"></label>
+        <label>Eindtijd<input id="fEndTime" type="time" value="10:00"></label>
+      </div>
+    </div>`},
     shopping:{title:"Boodschap toevoegen",html:`<div class="form-grid"><label>Artikel<input id="fItem" placeholder="Bijv. tomaten"></label></div>`},
-    cleaning:{title:"Schoonmaaktaak toevoegen",html:`<div class="form-grid"><label>Taak<input id="fTask" placeholder="Bijv. koelkast schoonmaken"></label><label>Op welke dagen?</label><div class="day-picker">${["Ma","Di","Wo","Do","Vr","Za","Zo"].map((d,i)=>`<label class="day-pill"><input type="checkbox" name="cleanDay" value="${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"][i]}"><span>${d}</span></label>`).join("")}</div></div>`},
+    cleaning:{title:"Schoonmaaktaak toevoegen",html:`<div class="form-grid">
+      <label>Taak<input id="fTask" placeholder="Bijv. koelkast schoonmaken"></label>
+      <label>Herhaling
+        <select id="fRepeatType">
+          <option value="weekly">Op vaste weekdagen</option>
+          <option value="monthly1">1 keer per maand</option>
+          <option value="monthly2">2 keer per maand</option>
+        </select>
+      </label>
+      <div id="cleanRepeatFields"></div>
+    </div>`},
     income:{title:"Inkomst toevoegen",html:`<div class="form-grid"><label>Omschrijving<input id="fIncomeLabel" placeholder="Bijv. salaris"></label><label>Bedrag<input id="fIncomeAmount" type="number" step="0.01" min="0"></label><label>Datum<input id="fIncomeDate" type="date" value="${todayISO()}"></label></div>`},
-    cleanDays:{title:"Schoonmaakdagen aanpassen",html:`<div class="form-grid"><p class="subtle">Kies de dagen waarop deze taak op je Vandaag-scherm moet verschijnen.</p><div class="day-picker" id="editDays"></div></div>`},
+    cleanDays:{title:"Schoonmaakplanning aanpassen",html:`<div class="form-grid"><div id="editCleanRepeatFields"></div></div>`},
     budgetcat:{title:"Budgetcategorie toevoegen",html:`<div class="form-grid"><label>Naam<input id="fName" placeholder="Bijv. Kleding"></label><label>Maandbudget<input id="fLimit" type="number" min="0" step="1" placeholder="100"></label></div>`},
     meal:{title:"Maaltijd bewerken",html:`<div class="form-grid"><label>Dag<select id="fDay">${Object.keys(state.meals).map(d=>`<option>${d}</option>`).join("")}</select></label><label>Moment<select id="fSlot"><option>Ontbijt</option><option>Lunch</option><option>Diner</option></select></label><label>Maaltijd<input id="fMeal" placeholder="Bijv. pasta pesto"></label></div>`}
   };
   modalTitle.textContent=fields[type].title;
   modalBody.innerHTML=fields[type].html;
   modal.dataset.type=type;
+  function renderCleanRepeat(containerId,prefix,task=null){
+    const el=document.getElementById(containerId);
+    if(!el)return;
+    const typeSel=document.getElementById(prefix+"RepeatType");
+    const mode=typeSel?typeSel.value:(task?.repeatType==="monthly"?(task.monthDays?.length===2?"monthly2":"monthly1"):"weekly");
+    if(mode==="weekly"){
+      const selected=task?.days||[];
+      el.innerHTML=`<label>Weekdagen</label><div class="day-picker">${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"].map(d=>`<label class="day-pill"><input type="checkbox" name="${prefix}WeekDay" value="${d}" ${selected.includes(d)?"checked":""}><span>${d.slice(0,2)}</span></label>`).join("")}</div>`;
+    } else {
+      const count=mode==="monthly2"?2:1;
+      const existing=task?.monthDays||[];
+      el.innerHTML=`<div class="clean-month-choice">${[...Array(count)].map((_,i)=>`<label>Dag ${i+1} van de maand<input type="number" min="1" max="31" name="${prefix}MonthDay" value="${existing[i]||Math.min(28,1+i*14)}"></label>`).join("")}</div><small class="subtle">Op maanden met minder dagen wordt een datum boven het aantal dagen automatisch overgeslagen.</small>`;
+    }
+  }
+
   modal.dataset.editId=catIndex??"";
+  modal.showModal();
+
+  if(type==="agenda"){
+    const allDay=document.getElementById("fAllDay");
+    const timeFields=document.getElementById("timeFields");
+    const toggle=()=>{timeFields.style.display=allDay.checked?"none":"grid";};
+    allDay.addEventListener("change",toggle); toggle();
+  }
+
+  if(type==="cleaning"){
+    const sel=document.getElementById("fRepeatType");
+    const wrapper=document.getElementById("cleanRepeatFields");
+    const draw=()=>{
+      const mode=sel.value;
+      if(mode==="weekly"){
+        wrapper.innerHTML=`<label>Weekdagen</label><div class="day-picker">${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"].map(d=>`<label class="day-pill"><input type="checkbox" name="newWeekDay" value="${d}"><span>${d.slice(0,2)}</span></label>`).join("")}</div>`;
+      } else {
+        const count=mode==="monthly2"?2:1;
+        wrapper.innerHTML=`<div class="clean-month-choice">${[...Array(count)].map((_,i)=>`<label>Dag ${i+1} van de maand<input type="number" min="1" max="31" name="newMonthDay" value="${i===0?1:15}"></label>`).join("")}</div>`;
+      }
+    };
+    sel.addEventListener("change",draw); draw();
+  }
+
   if(type==="cleanDays"){
     const task=state.cleaning.find(x=>x.id===catIndex);
-    const days=["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"];
-    document.getElementById("editDays").innerHTML=days.map(d=>`<label class="day-pill"><input type="checkbox" name="editCleanDay" value="${d}" ${(task.days||[]).includes(d)?"checked":""}><span>${d.slice(0,2)}</span></label>`).join("");
+    const edit=document.getElementById("editCleanRepeatFields");
+    const inferred=task.repeatType==="monthly"?(task.monthDays?.length===2?"monthly2":"monthly1"):"weekly";
+    edit.innerHTML=`<label>Herhaling<select id="editRepeatType"><option value="weekly" ${inferred==="weekly"?"selected":""}>Op vaste weekdagen</option><option value="monthly1" ${inferred==="monthly1"?"selected":""}>1 keer per maand</option><option value="monthly2" ${inferred==="monthly2"?"selected":""}>2 keer per maand</option></select></label><div id="editRepeatInner"></div>`;
+    const sel=document.getElementById("editRepeatType"), inner=document.getElementById("editRepeatInner");
+    const draw=()=>{
+      const mode=sel.value;
+      if(mode==="weekly"){
+        inner.innerHTML=`<label>Weekdagen</label><div class="day-picker">${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"].map(d=>`<label class="day-pill"><input type="checkbox" name="editWeekDay" value="${d}" ${(task.days||[]).includes(d)?"checked":""}><span>${d.slice(0,2)}</span></label>`).join("")}</div>`;
+      } else {
+        const count=mode==="monthly2"?2:1, vals=task.monthDays||[1,15];
+        inner.innerHTML=`<div class="clean-month-choice">${[...Array(count)].map((_,i)=>`<label>Dag ${i+1} van de maand<input type="number" min="1" max="31" name="editMonthDay" value="${vals[i]|| (i===0?1:15)}"></label>`).join("")}</div>`;
+      }
+    };
+    sel.addEventListener("change",draw); draw();
   }
-  modal.showModal();
 }
 
 document.getElementById("modalForm").addEventListener("submit",e=>{
@@ -292,16 +506,38 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
   const t=modal.dataset.type;
   if(t==="expense"){ const i=Number(document.getElementById("fCat").value); const a=Number(document.getElementById("fAmount").value||0); state.budgets[i].spent += a; state.transactions.push({id:Date.now(),type:"expense",amount:a,date:todayISO(),label:state.budgets[i].name}); }
   if(t==="income"){ const a=Number(document.getElementById("fIncomeAmount").value||0); const d=document.getElementById("fIncomeDate").value; const l=document.getElementById("fIncomeLabel").value||"Inkomst"; state.transactions.push({id:Date.now(),type:"income",amount:a,date:d,label:l}); }
-  if(t==="agenda"){ state.agenda.push({id:Date.now(),title:document.getElementById("fTitle").value||"Afspraak",date:document.getElementById("fDate").value,time:document.getElementById("fTime").value}); }
+  if(t==="agenda"){
+    const allDay=document.getElementById("fAllDay").checked;
+    const start=document.getElementById("fStartTime").value;
+    const end=document.getElementById("fEndTime").value;
+    if(!allDay && start && end && end<=start){ alert("De eindtijd moet na de begintijd liggen."); return; }
+    state.agenda.push({id:Date.now(),title:document.getElementById("fTitle").value||"Afspraak",date:document.getElementById("fDate").value,allDay,startTime:allDay?"":start,endTime:allDay?"":end});
+  }); }
   if(t==="shopping"){ const v=document.getElementById("fItem").value.trim(); if(v)state.shopping.push(v); }
-  if(t==="cleaning"){ const v=document.getElementById("fTask").value.trim(); const days=[...document.querySelectorAll('input[name="cleanDay"]:checked')].map(x=>x.value); if(v)state.cleaning.push({id:Date.now(),task:v,freq:"Op gekozen dagen",days,done:false}); }
-  if(t==="cleanDays"){ const id=Number(modal.dataset.editId); const task=state.cleaning.find(x=>x.id===id); if(task)task.days=[...document.querySelectorAll('input[name="editCleanDay"]:checked')].map(x=>x.value); }
+  if(t==="cleaning"){
+    const v=document.getElementById("fTask").value.trim();
+    const mode=document.getElementById("fRepeatType").value;
+    if(v){
+      const task={id:Date.now(),task:v,freq:"Aangepast",done:false};
+      if(mode==="weekly"){ task.repeatType="weekly"; task.days=[...document.querySelectorAll('input[name="newWeekDay"]:checked')].map(x=>x.value); }
+      else { task.repeatType="monthly"; task.monthDays=[...document.querySelectorAll('input[name="newMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))); }
+      state.cleaning.push(task);
+    }
+  }); }
+  if(t==="cleanDays"){
+    const id=Number(modal.dataset.editId), task=state.cleaning.find(x=>x.id===id);
+    if(task){
+      const mode=document.getElementById("editRepeatType").value;
+      if(mode==="weekly"){ task.repeatType="weekly"; task.days=[...document.querySelectorAll('input[name="editWeekDay"]:checked')].map(x=>x.value); task.monthDays=[]; }
+      else { task.repeatType="monthly"; task.monthDays=[...document.querySelectorAll('input[name="editMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))); task.days=[]; }
+    }
+  }
   if(t==="budgetcat"){ const n=document.getElementById("fName").value.trim(); const l=Number(document.getElementById("fLimit").value||0); if(n)state.budgets.push({name:n,limit:l,spent:0}); }
   if(t==="meal"){ const d=document.getElementById("fDay").value,s=document.getElementById("fSlot").value,m=document.getElementById("fMeal").value.trim(); if(m)state.meals[d][s]=m; }
   save(); modal.close(); render();
 });
 
-document.getElementById("quickAddBtn").onclick=()=>openModal(currentPage==="home"?"agenda":({budget:"expense",meals:"meal",agenda:"agenda",cleaning:"cleaning"})[currentPage]);
+document.getElementById("quickAddBtn").onclick=()=>openModal(currentPage==="home"?"agenda":({budget:"expense",meals:"meal",shopping:"shopping",agenda:"agenda",cleaning:"cleaning"})[currentPage]);
 document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>{currentPage=b.dataset.page;render();});
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 
