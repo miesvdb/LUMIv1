@@ -307,18 +307,20 @@ function budgetTransactions(monthKey=budgetMonth){
 function budgetTotals(monthKey=budgetMonth){
   const tx=budgetTransactions(monthKey);
   const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
-  const variableExpenses=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+  const budgetAdjustment=tx.filter(t=>t.type==="budget_adjustment").reduce((s,t)=>s+Number(t.amount||0),0);
+  const expenseAdjustment=tx.filter(t=>t.type==="expense_adjustment").reduce((s,t)=>s+Number(t.amount||0),0);
+  const variableExpenses=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0)+expenseAdjustment;
   const savedThisMonth=tx.filter(t=>t.type==="saving").reduce((s,t)=>s+Number(t.amount||0),0);
   const baseIncome=Math.max(0,Number(profile.income||0));
   const fixedExpenses=Math.max(0,Number(profile.fixed||0));
   const monthlySavingsGoal=Math.max(0,Number(profile.savingsGoal||0));
-  const totalIncome=baseIncome+extraIncome;
+  const totalIncome=baseIncome+extraIncome+budgetAdjustment;
   const totalExpenses=fixedExpenses+variableExpenses;
   // Werkelijke spaarinleg telt mee; zolang die lager is dan het maanddoel blijft
   // het resterende deel van het maanddoel gereserveerd. Zo wordt sparen nooit dubbel afgetrokken.
   const savingsReserved=Math.max(monthlySavingsGoal,savedThisMonth);
   const remaining=totalIncome-totalExpenses-savingsReserved;
-  return {baseIncome,extraIncome,totalIncome,fixedExpenses,variableExpenses,totalExpenses,monthlySavingsGoal,savedThisMonth,savingsReserved,remaining};
+  return {baseIncome,extraIncome,budgetAdjustment,expenseAdjustment,totalIncome,fixedExpenses,variableExpenses,totalExpenses,monthlySavingsGoal,savedThisMonth,savingsReserved,remaining};
 }
 function categorySpent(name,monthKey=budgetMonth){
   return budgetTransactions(monthKey)
@@ -348,6 +350,8 @@ function transactionLabel(t){
     const g=(state.savingsGoals||[]).find(x=>String(x.id)===String(t.goalId));
     return `Sparen${g?" · "+g.name:""}`;
   }
+  if(t.type==="budget_adjustment") return "Handmatige correctie budgetruimte";
+  if(t.type==="expense_adjustment") return "Handmatige correctie uitgaven";
   return t.label||"Transactie";
 }
 function budgetPage(){
@@ -369,22 +373,22 @@ function budgetPage(){
     </div>
 
     <div class="grid2 budget-main-stats">
-      <div class="stat budget-remaining">
+      <button class="stat budget-remaining editable-budget-stat" type="button" data-adjust-budget="remaining">
         <small>Nog uit te geven</small>
         <strong>${euro(totals.remaining)}</strong>
-        <span>na uitgaven en gereserveerd sparen</span>
-      </div>
-      <div class="stat budget-expenses">
+        <span>na uitgaven en gereserveerd sparen · aanpassen</span>
+      </button>
+      <button class="stat budget-expenses editable-budget-stat" type="button" data-adjust-budget="expenses">
         <small>Uitgaven</small>
         <strong>${euro(totals.totalExpenses)}</strong>
-        <span>vast + variabel</span>
-      </div>
+        <span>vast + variabel · aanpassen</span>
+      </button>
     </div>
 
     <div class="budget-mini-summary budget-four-summary">
-      <div><small>Totaal inkomen</small><strong>${euro(totals.totalIncome)}</strong><span>${totals.extraIncome?`incl. ${euro(totals.extraIncome)} extra`:"basisinkomen"}</span></div>
+      <div><small>Totaal inkomen</small><strong>${euro(totals.totalIncome)}</strong><span>${totals.budgetAdjustment?`incl. handmatige correctie ${euro(totals.budgetAdjustment)}`:(totals.extraIncome?`incl. ${euro(totals.extraIncome)} extra`:"basisinkomen")}</span></div>
       <div><small>Vaste lasten</small><strong>${euro(totals.fixedExpenses)}</strong><span>uit je profiel</span></div>
-      <div><small>Variabele uitgaven</small><strong>${euro(totals.variableExpenses)}</strong><span>uit transacties</span></div>
+      <div><small>Variabele uitgaven</small><strong>${euro(totals.variableExpenses)}</strong><span>${totals.expenseAdjustment?"incl. handmatige correctie":"uit transacties"}</span></div>
       <div><small>Sparen deze maand</small><strong>${euro(totals.savedThisMonth)}</strong><span>doel ${euro(totals.monthlySavingsGoal)}</span></div>
     </div>
 
@@ -457,14 +461,14 @@ function budgetPage(){
         ${tx.length ? tx.map(t=>`
           <div class="transaction-row">
             <div class="transaction-sign ${t.type}">
-              ${t.type==="income"?"+":t.type==="expense"?"−":"S"}
+              ${t.type==="income"?"+":t.type==="expense"?"−":t.type==="saving"?"S":"C"}
             </div>
             <div class="row-main">
               <strong>${transactionLabel(t)}</strong>
               <small>${new Date((t.date||todayISO())+"T12:00:00").toLocaleDateString("nl-NL",{day:"numeric",month:"short"})}${t.type==="expense" && t.category?` · ${t.category}`:""}</small>
             </div>
-            <div class="transaction-amount ${t.type}">${t.type==="income"?"+":t.type==="expense"?"−":"−"} ${euro(Number(t.amount||0))}</div>
-            <button class="transaction-edit" type="button" data-edit-tx="${t.id}" aria-label="Transactie bewerken">Wijzig</button>
+            <div class="transaction-amount ${t.type}">${Number(t.amount||0)>=0?"+":"−"} ${euro(Math.abs(Number(t.amount||0)))}</div>
+            ${["budget_adjustment","expense_adjustment"].includes(t.type)?"":`<button class="transaction-edit" type="button" data-edit-tx="${t.id}" aria-label="Transactie bewerken">Wijzig</button>`}
           </div>`).join("") : `<div class="empty">Nog geen losse transacties in ${monthLabel(budgetMonth)}.</div>`}
       </div>
     </div>`;
@@ -478,8 +482,10 @@ function budgetChart(){
   const data=months.map(d=>{
     const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
     const tx=budgetTransactions(key);
-    const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
-    const variableExpense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+    const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0)
+      + tx.filter(t=>t.type==="budget_adjustment").reduce((s,t)=>s+Number(t.amount||0),0);
+    const variableExpense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0)
+      + tx.filter(t=>t.type==="expense_adjustment").reduce((s,t)=>s+Number(t.amount||0),0);
     return {
       label:d.toLocaleDateString("nl-NL",{month:"short"}),
       income:Number(profile.income||0)+extraIncome,
@@ -505,7 +511,7 @@ function mealsPage(){
     <div class="section-title"><h3>Vandaag</h3></div>
     <label class="row task-row ${isDone("meal","dinner")?"done":""}">
       <input class="task-check" type="checkbox" data-meal-done="dinner" ${isDone("meal","dinner")?"checked":""}>
-      <div class="row-main"><strong>Diner</strong><small>${state.meals[todayName()]?.Diner || "Nog niet gepland"}</small></div>
+      <button class="row-main meal-today-link" type="button" data-meal-shopping="${todayName()}|Diner"><strong>Diner</strong><small>${state.meals[todayName()]?.Diner || "Nog niet gepland"}</small></button>
       <span class="pill">${isDone("meal","dinner")?"Gedaan":"Vandaag"}</span>
     </label>
     <div class="section-title"><h3>Deze week</h3><button class="link-btn" data-add="meal">bewerken</button></div>
@@ -514,26 +520,29 @@ function mealsPage(){
         <div class="meal-day">
           <div class="day">${day.slice(0,2)}</div>
           <div>
-            ${Object.entries(slots).map(([slot,val])=>`<div class="meal-slot"><small>${slot}</small>${val}</div>`).join("")}
+            ${Object.entries(slots).map(([slot,val])=>`<button class="meal-slot meal-to-shopping" type="button" data-meal-shopping="${day}|${slot}"><small>${slot}</small><span>${val}</span><em>Naar boodschappenlijst</em></button>`).join("")}
           </div>
         </div>`).join("")}
     </div>
     <div class="section-title"><h3>Boodschappenlijst</h3><button class="link-btn" data-add="shopping">＋ item</button></div>
     <div class="list">
-      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="badge theme-orange">✓</div><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
+      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="badge theme-orange">✓</div><div class="row-main"><strong>${x}</strong></div><div class="shopping-actions"><button class="link-btn" data-edit-shopping="${i}">bewerk</button><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
     </div>`;
 }
 
 function shoppingPage(){
+  let mealContext=null;
+  try{ mealContext=JSON.parse(sessionStorage.getItem("lumiMealShoppingContext")||"null"); }catch(e){}
   return `
     <section class="hero theme-orange">
       <h2>Boodschappen<span class="brand-script">lijst</span></h2>
       <p>${state.shopping.length} artikelen voor vandaag.</p>
       <div class="decor-letter">B</div>
     </section>
+    ${mealContext?`<div class="card meal-shopping-context"><small>${mealContext.day} · ${mealContext.slot}</small><strong>${mealContext.meal||"Maaltijd"}</strong><p>Pas hieronder je boodschappenlijst aan voor deze maaltijd.</p><button class="link-btn" type="button" data-clear-meal-context>Sluiten</button></div>`:""}
     <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-add="shopping">Item toevoegen</button></div>
     <div class="list">
-      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je boodschappenlijst is leeg.</div>`}
+      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="row-main"><strong>${x}</strong></div><div class="shopping-actions"><button class="link-btn" data-edit-shopping="${i}">bewerk</button><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div></div>`).join(""):`<div class="empty">Je boodschappenlijst is leeg.</div>`}
     </div>
     <div class="fab-row"><button class="action-btn" data-go="meals">Terug naar maaltijdplanner</button></div>`;
 }
@@ -729,7 +738,19 @@ function bindPageEvents(){
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{currentPage=b.dataset.go;render();});
   document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openModal(b.dataset.add));
   document.querySelectorAll("[data-expense-cat]").forEach(b=>b.onclick=()=>openModal("expense",Number(b.dataset.expenseCat)));
+  document.querySelectorAll("[data-adjust-budget]").forEach(b=>b.onclick=()=>openModal("budgetAdjust",b.dataset.adjustBudget));
+  document.querySelectorAll("[data-meal-shopping]").forEach(b=>b.onclick=(e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const [day,slot]=b.dataset.mealShopping.split("|");
+    sessionStorage.setItem("lumiMealShoppingContext",JSON.stringify({day,slot,meal:state.meals[day]?.[slot]||""}));
+    currentPage="shopping";
+    render();
+  });
+  document.querySelectorAll("[data-edit-shopping]").forEach(b=>b.onclick=()=>openModal("editShopping",Number(b.dataset.editShopping)));
+
   document.querySelectorAll("[data-remove-shopping]").forEach(b=>b.onclick=()=>{state.shopping.splice(Number(b.dataset.removeShopping),1);save();render();});
+  document.querySelectorAll("[data-clear-meal-context]").forEach(b=>b.onclick=()=>{sessionStorage.removeItem("lumiMealShoppingContext");render();});
   document.querySelectorAll("[data-delete-agenda]").forEach(b=>b.onclick=()=>{state.agenda=state.agenda.filter(a=>a.id!==Number(b.dataset.deleteAgenda));save();render();});
   document.querySelectorAll("[data-clean]").forEach(c=>c.onchange=()=>{setDone("clean",c.dataset.clean,c.checked);render();});
 }
@@ -747,6 +768,20 @@ function openModal(type, catIndex=null){
       </div>
     </div>`},
     shopping:{title:"Boodschap toevoegen",html:`<div class="form-grid"><label>Artikel<input id="fItem" placeholder="Bijv. tomaten"></label></div>`},
+    editShopping:{title:"Boodschap bewerken",html:(()=>{
+      const i=Number(catIndex), item=state.shopping[i]||"";
+      return `<div class="form-grid"><label>Artikel<input id="fEditShopping" value="${item}"></label></div>`;
+    })()},
+    budgetAdjust:{title:catIndex==="remaining"?"Nog uit te geven aanpassen":"Uitgaven aanpassen",html:(()=>{
+      const totals=budgetTotals(budgetMonth);
+      const current=catIndex==="remaining"?totals.remaining:totals.totalExpenses;
+      return `<div class="form-grid">
+        <p class="subtle">Je past het totaal voor ${monthLabel(budgetMonth)} aan. Lumi maakt hiervoor één zichtbare correctie en rekent de andere bedragen daarna automatisch opnieuw uit.</p>
+        <label>${catIndex==="remaining"?"Gewenst bedrag nog uit te geven":"Gewenst totaal uitgaven"}
+          <input id="fBudgetTarget" type="number" step="0.01" value="${Number(current).toFixed(2)}">
+        </label>
+      </div>`;
+    })()},
     cleaning:{title:"Schoonmaaktaak toevoegen",html:`<div class="form-grid">
       <label>Taak<input id="fTask" placeholder="Bijv. koelkast schoonmaken"></label>
       <label>Herhaling
@@ -920,6 +955,35 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
     state.agenda.push({id:Date.now(),title:document.getElementById("fTitle").value||"Afspraak",date:document.getElementById("fDate").value,allDay,startTime:allDay?"":start,endTime:allDay?"":end});
   }
   if(t==="shopping"){ const v=document.getElementById("fItem").value.trim(); if(v)state.shopping.push(v); }
+  if(t==="editShopping"){
+    const i=Number(modal.dataset.editId);
+    const v=document.getElementById("fEditShopping").value.trim();
+    if(v && state.shopping[i]!==undefined) state.shopping[i]=v;
+  }
+  if(t==="budgetAdjust"){
+    const kind=modal.dataset.editId;
+    const target=Number(document.getElementById("fBudgetTarget").value);
+    if(!Number.isFinite(target)){ alert("Vul een geldig bedrag in."); return; }
+    const totals=budgetTotals(budgetMonth);
+    const current=kind==="remaining"?totals.remaining:totals.totalExpenses;
+    const delta=target-current;
+    const txType=kind==="remaining"?"budget_adjustment":"expense_adjustment";
+    const date=budgetMonth===todayISO().slice(0,7)?todayISO():budgetMonth+"-01";
+    let correction=(state.transactions||[]).find(x=>x.type===txType && (x.date||"").startsWith(budgetMonth));
+    if(correction){
+      correction.amount=Number(correction.amount||0)+delta;
+      if(Math.abs(correction.amount)<0.005) state.transactions=state.transactions.filter(x=>x!==correction);
+    }else if(Math.abs(delta)>=0.005){
+      state.transactions.push({
+        id:Date.now(),
+        type:txType,
+        amount:delta,
+        date,
+        description:kind==="remaining"?"Handmatige correctie budgetruimte":"Handmatige correctie uitgaven",
+        label:kind==="remaining"?"Budgetcorrectie":"Uitgavencorrectie"
+      });
+    }
+  }
   if(t==="cleaning"){
     const v=document.getElementById("fTask").value.trim();
     const mode=document.getElementById("fRepeatType").value;

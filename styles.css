@@ -570,3 +570,118 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
   .compact-actions{display:grid;grid-template-columns:1fr 1fr}
   .compact-actions .danger-link{grid-column:1/-1}
 }
+
+/* Lumi — Maaltijden: oude oranje accenten vervangen door de hoofdkleur */
+.page-meals{
+  --accent:#F5EFC6;
+}
+.page-meals .hero{
+  background:linear-gradient(145deg,#FFFDF2,#F5EFC6)!important;
+  color:#4A2E27!important;
+}
+.page-meals .hero p,
+.page-meals .hero small{
+  color:#4A2E27!important;
+}
+.page-meals .action-btn,
+.page-meals .secondary.active,
+.page-meals .segmented .active{
+  background:#F5EFC6!important;
+  border-color:#D9C97E!important;
+  color:#4A2E27!important;
+}
+.page-meals .card,
+.page-meals .row{
+  border-color:#E1D6A4;
+}
+.page-meals .pill{
+  background:#F5EFC6!important;
+  color:#4A2E27!important;
+}
+.page-meals input:checked,
+.page-meals .task-check:checked{
+  accent-color:#4A2E27!important;
+}
+
+/* Lumi — bewerkbare budgetstanden en maaltijd → boodschappen */
+.editable-budget-stat{
+  width:100%;
+  text-align:left;
+  font:inherit;
+  cursor:pointer;
+  appearance:none;
+}
+.editable-budget-stat:focus-visible{
+  outline:3px solid rgba(165,188,214,.75);
+  outline-offset:2px;
+}
+.transaction-sign.budget_adjustment,
+.transaction-sign.expense_adjustment{
+  background:#e8dfd6;
+  color:var(--brown);
+}
+.transaction-amount.budget_adjustment,
+.transaction-amount.expense_adjustment{
+  color:var(--brown);
+}
+
+.meal-slot.meal-to-shopping{
+  width:100%;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  padding:10px 8px;
+  border-radius:12px;
+}
+.meal-slot.meal-to-shopping span{
+  display:block;
+}
+.meal-slot.meal-to-shopping em{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:10px;
+  font-style:normal;
+}
+.meal-slot.meal-to-shopping:focus-visible,
+.meal-today-link:focus-visible{
+  outline:2px solid var(--brown);
+  outline-offset:2px;
+}
+.meal-today-link{
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  font:inherit;
+  cursor:pointer;
+  padding:0;
+}
+.shopping-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.meal-shopping-context{
+  border-top:4px solid #F5EFC6!important;
+  background:#FFFDF2!important;
+}
+.meal-shopping-context small,
+.meal-shopping-context strong{
+  display:block;
+}
+.meal-shopping-context strong{
+  margin-top:4px;
+  font-family:var(--serif);
+  font-size:22px;
+  color:var(--brown);
+}
+.meal-shopping-context p{
+  margin:6px 0;
+  color:var(--muted);
+  font-size:12px;
+}
