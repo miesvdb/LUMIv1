@@ -7,7 +7,7 @@
   --line:#e7e1d8;
   --blue:#3154c7;
   --green:#A5BCD6;
-  --orange:#e77b12;
+  --meal-accent:#F5EFC6;
   --purple:#7d48d6;
   --yellow:#efb400;
   --shadow:0 10px 30px rgba(35,31,26,.08);
@@ -31,7 +31,7 @@ h2{font-size:24px;margin:0}
 .hero .scribble{position:absolute;right:18px;bottom:8px;font-size:56px;opacity:.9;transform:rotate(-9deg)}
 .theme-blue{background:var(--blue)}
 .theme-green{background:var(--blue)}
-.theme-orange{background:var(--orange)}
+.theme-orange{background:var(--meal-accent)}
 .theme-purple{background:var(--purple)}
 .theme-yellow{background:var(--yellow)}
 .section-title{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
@@ -71,7 +71,7 @@ h2{font-size:24px;margin:0}
 .nav-item.active{color:#fff}
 .nav-item[data-page=home].active{background:var(--blue)}
 .nav-item[data-page=budget].active{background:var(--blue)}
-.nav-item[data-page=meals].active{background:var(--orange)}
+.nav-item[data-page=meals].active{background:var(--meal-accent)}
 .nav-item[data-page=agenda].active{background:var(--purple)}
 .nav-item[data-page=cleaning].active{background:var(--yellow)}
 .fab-row{display:flex;gap:10px;flex-wrap:wrap}
@@ -720,3 +720,26 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
 .meal-to-shopping span{
   color:#4A2E27!important;
 }
+
+/* Lumi kwaliteitsronde */
+.nav-item[data-page=meals].active{
+  background:#F5EFC6!important;
+  color:#4A2E27!important;
+}
+.theme-orange{
+  background:#F5EFC6!important;
+  color:#4A2E27!important;
+}
+.budget-correction-note{
+  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:-2px 0 14px;padding:9px 12px;border-radius:12px;
+  background:#f3eee9;color:#4A2E27;font-size:12px;
+}
+.row-actions,.shopping-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.shopping-row.done .row-main{opacity:.45;text-decoration:line-through}
+.ingredient-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.ingredient-chips span{padding:5px 8px;border-radius:999px;background:#F5EFC6;color:#4A2E27;font-size:11px}
+.meal-profile-card{border-top:4px solid #F5EFC6!important}
+.meal-profile-card p{margin-bottom:0;color:var(--muted)}
+.backup-card .file-button{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.backup-card .file-button input{position:absolute;opacity:0;pointer-events:none}
