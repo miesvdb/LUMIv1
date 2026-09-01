@@ -1,5 +1,5 @@
 
-const COLORS = {home:"#3154c7",budget:"#55a83d",meals:"#e77b12",agenda:"#7d48d6",cleaning:"#A5BCD6"};
+const COLORS = {home:"#A5BCD6",budget:"#4A2E27",meals:"#F5EFC6",shopping:"#F5EFC6",agenda:"#4D0E12",cleaning:"#A5BCD6"};
 
 const defaults = {
   income: 2600,
@@ -48,7 +48,7 @@ let onboardIndex = 0;
 let agendaView = localStorage.getItem("lumiAgendaView") || "week";
 let agendaCursor = new Date();
 const DAY_NAMES=["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function todayName(){ return DAY_NAMES[new Date().getDay()]; }
 function dateParts(iso){ const [y,m,d]=iso.split("-").map(Number); return {y,m,d}; }
 function dateObj(iso){ const p=dateParts(iso); return new Date(p.y,p.m-1,p.d,12,0,0); }
@@ -107,12 +107,16 @@ function migrateState(){
   state.cleaning=state.cleaning||[];
   state.cleaning.forEach((x,i)=>{
     x.id=x.id||Date.now()+i;
-    if(!x.repeatType) x.repeatType="weekly";
-    if(!Array.isArray(x.days)){
-      const defaultsByFreq={"Dagelijks":["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"],"2× per week":["Dinsdag","Vrijdag"],"Wekelijks":["Zaterdag"],"Elke 2 weken":["Zaterdag"],"Maandelijks":["Zaterdag"]};
+    if(!x.repeatType){
+      if(x.freq==="Maandelijks"){ x.repeatType="monthly"; x.monthDays=[1]; }
+      else x.repeatType="weekly";
+    }
+    if(x.repeatType==="weekly" && !Array.isArray(x.days)){
+      const defaultsByFreq={"Dagelijks":["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"],"2× per week":["Dinsdag","Vrijdag"],"Wekelijks":["Zaterdag"],"Elke 2 weken":["Zaterdag"]};
       x.days=defaultsByFreq[x.freq]||["Zaterdag"];
     }
-    if(x.done && x.days.includes(todayName())) setDone("clean",x.id,true);
+    if(x.repeatType==="monthly" && !Array.isArray(x.monthDays)) x.monthDays=[1];
+    if(x.done && cleanDueOn(x,new Date())) setDone("clean",x.id,true);
   });
   if(!state.transactions.length){
     const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,"0");
@@ -143,7 +147,7 @@ function dateNL(d=new Date()){ return d.toLocaleDateString("nl-NL",{weekday:"lon
 function render(){
   document.documentElement.style.setProperty("--active", COLORS[currentPage]);
   todayLabel.textContent = dateNL();
-  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage));
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage || (currentPage==="shopping" && b.dataset.page==="meals")));
   const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema"};
   pageTitle.textContent = titleMap[currentPage];
   content.innerHTML = ({home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage})[currentPage]();
@@ -211,7 +215,7 @@ function budgetPage(){
     </div>
     ${budgetChart()}
     <div class="fab-row"><button class="action-btn" data-add="income">Inkomst toevoegen</button><button class="action-btn" data-add="expense">Uitgave toevoegen</button></div>
-    <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">＋ categorie</button></div>
+    <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">Categorie toevoegen</button></div>
     <div class="list">
       ${state.budgets.map((b,i)=>{
         const pct=Math.min(100,Math.round((b.spent/b.limit)*100));
@@ -248,6 +252,12 @@ function mealsPage(){
       <p>Plan je week en houd je boodschappen automatisch bij.</p>
       <div class="decor-letter">M</div>
     </section>
+    <div class="section-title"><h3>Vandaag</h3></div>
+    <label class="row task-row ${isDone("meal","dinner")?"done":""}">
+      <input class="task-check" type="checkbox" data-meal-done="dinner" ${isDone("meal","dinner")?"checked":""}>
+      <div class="row-main"><strong>Diner</strong><small>${state.meals[todayName()]?.Diner || "Nog niet gepland"}</small></div>
+      <span class="pill">${isDone("meal","dinner")?"Gedaan":"Vandaag"}</span>
+    </label>
     <div class="section-title"><h3>Deze week</h3><button class="link-btn" data-add="meal">bewerken</button></div>
     <div class="card">
       ${Object.entries(state.meals).map(([day,slots])=>`
@@ -260,7 +270,7 @@ function mealsPage(){
     </div>
     <div class="section-title"><h3>Boodschappenlijst</h3><button class="link-btn" data-add="shopping">＋ item</button></div>
     <div class="list">
-      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="badge theme-orange">✓</div><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
+      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
     </div>`;
 }
 
@@ -373,11 +383,14 @@ function cleaningPage(){
     </section>
     <div class="section-title"><h3>Schema</h3><button class="link-btn" data-add="cleaning">Taak toevoegen</button></div>
     <div class="list">
-      ${state.cleaning.map(x=>`<div class="row cleaning-task task-row ${isDone("clean",x.id)?"done":""}">
-        <input class="task-check" type="checkbox" data-clean="${x.id}" ${isDone("clean",x.id)?"checked":""}>
-        <div class="row-main"><strong>${x.task}</strong><small>${cleaningScheduleLabel(x)}</small></div>
-        <button class="link-btn" data-edit-clean="${x.id}">planning</button>
-      </div>`).join("")}
+      ${state.cleaning.map(x=>{
+        const isDue=cleanDueOn(x,new Date());
+        return `<div class="row cleaning-task task-row ${isDue && isDone("clean",x.id)?"done":""}">
+          ${isDue?`<input class="task-check" type="checkbox" data-clean="${x.id}" ${isDone("clean",x.id)?"checked":""}>`:`<span class="schedule-mark" aria-hidden="true"></span>`}
+          <div class="row-main"><strong>${x.task}</strong><small>${cleaningScheduleLabel(x)}${isDue?" · Vandaag":""}</small></div>
+          <button class="link-btn" data-edit-clean="${x.id}">planning</button>
+        </div>`;
+      }).join("")}
     </div>`;
 }
 function row(color,icon,title,sub){return `<div class="row"><span style="width:5px;height:38px;border-radius:99px;background:${color}"></span><div class="row-main"><strong>${title}</strong><small>${sub}</small></div></div>`}
@@ -399,6 +412,7 @@ function bindPageEvents(){
   });
 
   document.querySelectorAll("[data-home-task]").forEach(c=>c.onchange=()=>{setDone(c.dataset.homeTask,c.dataset.taskId,c.checked);render();});
+  document.querySelectorAll("[data-meal-done]").forEach(c=>c.onchange=()=>{setDone("meal",c.dataset.mealDone,c.checked);render();});
   document.querySelectorAll("[data-agenda-done]").forEach(c=>c.onchange=()=>{setDone("agenda",c.dataset.agendaDone,c.checked,c.dataset.agendaDate);render();});
   document.querySelectorAll("[data-edit-clean]").forEach(b=>b.onclick=()=>openModal("cleanDays",Number(b.dataset.editClean)));
 
@@ -414,8 +428,8 @@ function openModal(type, catIndex=null){
   const fields={
     expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label></div>`},
     agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid">
-      <label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label>
-      <label>Datum<input id="fDate" type="date" value="${todayISO()}"></label>
+      <label>Titel<input id="fTitle" required placeholder="Bijv. tandarts"></label>
+      <label>Datum<input id="fDate" type="date" required value="${todayISO()}"></label>
       <label class="switch-line"><input id="fAllDay" type="checkbox"> Hele dag</label>
       <div class="time-row" id="timeFields">
         <label>Begintijd<input id="fStartTime" type="time" value="09:00"></label>
@@ -439,6 +453,7 @@ function openModal(type, catIndex=null){
     budgetcat:{title:"Budgetcategorie toevoegen",html:`<div class="form-grid"><label>Naam<input id="fName" placeholder="Bijv. Kleding"></label><label>Maandbudget<input id="fLimit" type="number" min="0" step="1" placeholder="100"></label></div>`},
     meal:{title:"Maaltijd bewerken",html:`<div class="form-grid"><label>Dag<select id="fDay">${Object.keys(state.meals).map(d=>`<option>${d}</option>`).join("")}</select></label><label>Moment<select id="fSlot"><option>Ontbijt</option><option>Lunch</option><option>Diner</option></select></label><label>Maaltijd<input id="fMeal" placeholder="Bijv. pasta pesto"></label></div>`}
   };
+  if(!fields[type]) return;
   modalTitle.textContent=fields[type].title;
   modalBody.innerHTML=fields[type].html;
   modal.dataset.type=type;
@@ -512,7 +527,7 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
     const end=document.getElementById("fEndTime").value;
     if(!allDay && start && end && end<=start){ alert("De eindtijd moet na de begintijd liggen."); return; }
     state.agenda.push({id:Date.now(),title:document.getElementById("fTitle").value||"Afspraak",date:document.getElementById("fDate").value,allDay,startTime:allDay?"":start,endTime:allDay?"":end});
-  }); }
+  }
   if(t==="shopping"){ const v=document.getElementById("fItem").value.trim(); if(v)state.shopping.push(v); }
   if(t==="cleaning"){
     const v=document.getElementById("fTask").value.trim();
@@ -520,16 +535,19 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
     if(v){
       const task={id:Date.now(),task:v,freq:"Aangepast",done:false};
       if(mode==="weekly"){ task.repeatType="weekly"; task.days=[...document.querySelectorAll('input[name="newWeekDay"]:checked')].map(x=>x.value); }
-      else { task.repeatType="monthly"; task.monthDays=[...document.querySelectorAll('input[name="newMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))); }
+      else {
+        task.repeatType="monthly";
+        task.monthDays=[...new Set([...document.querySelectorAll('input[name="newMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))))].sort((a,b)=>a-b);
+      }
       state.cleaning.push(task);
     }
-  }); }
+  }
   if(t==="cleanDays"){
     const id=Number(modal.dataset.editId), task=state.cleaning.find(x=>x.id===id);
     if(task){
       const mode=document.getElementById("editRepeatType").value;
       if(mode==="weekly"){ task.repeatType="weekly"; task.days=[...document.querySelectorAll('input[name="editWeekDay"]:checked')].map(x=>x.value); task.monthDays=[]; }
-      else { task.repeatType="monthly"; task.monthDays=[...document.querySelectorAll('input[name="editMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))); task.days=[]; }
+      else { task.repeatType="monthly"; task.monthDays=[...new Set([...document.querySelectorAll('input[name="editMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))))].sort((a,b)=>a-b); task.days=[]; }
     }
   }
   if(t==="budgetcat"){ const n=document.getElementById("fName").value.trim(); const l=Number(document.getElementById("fLimit").value||0); if(n)state.budgets.push({name:n,limit:l,spent:0}); }

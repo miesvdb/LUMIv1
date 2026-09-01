@@ -1,22 +1,19 @@
-# Lumi v4
+# Lumi v5 — herstelde versie
 
-Deze versie past het ontwerp aan op het goedgekeurde Pantone-geïnspireerde kleurenpalet:
+Deze versie herstelt de JavaScript-fout waardoor Lumi v4 niet meer reageerde.
 
-- Transparent Yellow — #F5EFC6
-- Sceptre Red — #4D0E12
-- Cerulean Blue — #A5BCD6
-- Potting Soil — #4A2E27
-- Java Brown — #231815
+Gecontroleerde functies:
+- Vandaag-scherm en navigatie.
+- Dagelijkse taken afvinken; status blijft zichtbaar op Agenda, Maaltijden en Schoonmaak.
+- Klikbaar budgetblok en boodschappenblok op Vandaag.
+- Budgetgrafiek voor inkomsten en uitgaven.
+- Agenda in week-, maand- en jaaroverzicht.
+- Afspraken met begintijd, eindtijd of 'hele dag'.
+- Schoonmaaktaken op vaste weekdagen.
+- Schoonmaaktaken 1 of 2 keer per maand.
+- Schoonmaaktaken verschijnen alleen op de juiste dag op Vandaag.
+- Persoonlijke onboarding en lokale opslag.
+- Pantone-geïnspireerd Lumi-kleurenpalet.
+- Geen emoji-decoratie.
 
-Visuele wijzigingen:
-- warme crème achtergrond;
-- elegante Bodoni/Didot-achtige koppen;
-- Agenda in diep bordeauxrood;
-- Budget in donkerbruin;
-- Schoonmaak in Cerulean Blue;
-- Maaltijden en boodschappen in zachte crème/geeltinten;
-- rustigere kaarten, lijnen en knoppen;
-- budgetgrafiek aangepast aan hetzelfde kleurenpalet;
-- navigatie en formulieren volledig in de nieuwe stijl.
-
-Alle functies uit Lumi v3 blijven behouden.
+Voor GitHub Pages: vervang alle bestaande appbestanden door deze bestanden en wacht op de nieuwe Pages-deployment.

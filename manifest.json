@@ -3,8 +3,8 @@
   "short_name": "Lumi",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#fbf8f2",
-  "theme_color": "#3154c7",
+  "background_color": "#FBF8EF",
+  "theme_color": "#F5EFC6",
   "icons": [
     {
       "src": "icon-192.png",
