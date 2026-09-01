@@ -440,3 +440,133 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
 @media(max-width:430px){
   .inline-budget-form{grid-template-columns:1fr}
 }
+
+/* Lumi — Budget herbouwd */
+.budget-month-nav{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  text-align:center;
+  border-top:4px solid var(--brown)!important;
+}
+.budget-month-nav>div{display:flex;flex-direction:column;gap:2px;text-transform:capitalize}
+.budget-month-nav>div small{color:var(--muted)}
+.budget-month-nav .secondary{min-width:44px}
+.budget-current-month{grid-column:1/-1;justify-self:center}
+
+.budget-main-stats .stat span{
+  display:block;
+  margin-top:7px;
+  font-size:11px;
+  opacity:.76;
+}
+.budget-four-summary{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+.budget-mini-summary>div span{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.goal-progress-copy{
+  margin-top:7px;
+  color:var(--muted);
+  font-size:12px;
+}
+.budget-add-row .action-btn{flex:1 1 130px}
+.budget-category-card{
+  border-top:0!important;
+  border-left:4px solid var(--brown);
+}
+.budget-category-footer{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin-top:8px;
+  font-size:11px;
+  color:var(--muted);
+}
+.page-budget .progress>span,
+.page-budget .savings-progress>span{
+  background:var(--blue)!important;
+}
+
+.long-goal-card{
+  border-top:4px solid var(--blue)!important;
+  background:#f8fbfd!important;
+}
+.long-goal-head{
+  display:flex;
+  gap:12px;
+  justify-content:space-between;
+  align-items:flex-start;
+}
+.long-goal-head>div{min-width:0}
+.long-goal-head strong,.long-goal-head small{display:block}
+.long-goal-head small{color:var(--muted);margin-top:3px}
+.long-goal-amount{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  margin:16px 0 8px;
+}
+.long-goal-amount strong{
+  font-family:var(--serif);
+  font-size:25px;
+  color:var(--brown);
+}
+.long-goal-amount span{color:var(--muted);font-size:12px}
+.compact-actions{margin-top:14px}
+.compact-actions>*{flex:1 1 auto}
+.danger-link,.danger-action{color:var(--red)!important}
+
+.transaction-card{padding-top:8px!important}
+.transaction-base-note{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  padding:10px 0 14px;
+  border-bottom:1px solid var(--line);
+  font-size:12px;
+  color:var(--muted);
+}
+.transaction-base-note span{display:flex;justify-content:space-between;gap:8px}
+.transaction-base-note strong{color:var(--brown)}
+.transaction-row{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr) auto auto;
+  gap:9px;
+  align-items:center;
+  padding:12px 0;
+  border-bottom:1px solid var(--line);
+}
+.transaction-row:last-child{border-bottom:0}
+.transaction-sign{
+  width:32px;height:32px;border-radius:50%;
+  display:grid;place-items:center;
+  font-weight:800;font-size:12px;
+}
+.transaction-sign.income{background:#f5efc6;color:var(--brown)}
+.transaction-sign.expense{background:#f3e4e4;color:var(--red)}
+.transaction-sign.saving{background:#dde9f3;color:#46647f}
+.transaction-amount{font-weight:800;white-space:nowrap;font-size:13px}
+.transaction-amount.income{color:var(--brown)}
+.transaction-amount.expense{color:var(--red)}
+.transaction-amount.saving{color:#46647f}
+.transaction-edit{
+  border:0;background:transparent;color:var(--muted);
+  text-decoration:underline;text-underline-offset:3px;
+  padding:9px 2px;cursor:pointer;
+}
+@media(max-width:440px){
+  .budget-four-summary{grid-template-columns:1fr 1fr!important}
+  .transaction-row{grid-template-columns:32px minmax(0,1fr) auto}
+  .transaction-edit{grid-column:2/-1;justify-self:start;padding-top:0}
+  .transaction-base-note{grid-template-columns:1fr}
+  .compact-actions{display:grid;grid-template-columns:1fr 1fr}
+  .compact-actions .danger-link{grid-column:1/-1}
+}

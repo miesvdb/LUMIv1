@@ -5,11 +5,13 @@ const defaults = {
   income: 2600,
   fixed: 1510,
   budgets: [
-    {name:"Boodschappen", limit:350, spent:214.50},
-    {name:"Vervoer", limit:80, spent:48},
-    {name:"Vrije tijd", limit:120, spent:75},
-    {name:"Overig", limit:60, spent:30}
+    {name:"Boodschappen", limit:350, spent:0},
+    {name:"Vervoer", limit:80, spent:0},
+    {name:"Vrije tijd", limit:120, spent:0},
+    {name:"Overig", limit:60, spent:0}
   ],
+  transactions: [],
+  savingsGoals: [],
   meals: {
     Maandag:{Ontbijt:"Overnight oats",Lunch:"Salade",Diner:"Pasta pesto"},
     Dinsdag:{Ontbijt:"Yoghurt & fruit",Lunch:"Wrap met hummus",Diner:"Roerbakgroenten"},
@@ -50,6 +52,7 @@ if(!Array.isArray(profile.rooms)) profile.rooms=["Keuken","Woonkamer","Badkamer"
 let onboardIndex = 0;
 let agendaView = localStorage.getItem("lumiAgendaView") || "week";
 let agendaCursor = new Date();
+let budgetMonth = localStorage.getItem("lumiBudgetMonth") || todayISO().slice(0,7);
 const DAY_NAMES=["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
 function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function todayName(){ return DAY_NAMES[new Date().getDay()]; }
@@ -100,7 +103,9 @@ function setDone(kind,id,done,date=todayISO()){
 }
 function migrateState(){
   state.completedTasks=state.completedTasks||{};
-  state.transactions=state.transactions||[];
+  state.transactions=Array.isArray(state.transactions)?state.transactions:[];
+  state.savingsGoals=Array.isArray(state.savingsGoals)?state.savingsGoals:[];
+  state.budgets=Array.isArray(state.budgets)?state.budgets:[];
   state.agenda=state.agenda||[];
   state.agenda.forEach(a=>{
     if(a.allDay===undefined) a.allDay=false;
@@ -121,14 +126,23 @@ function migrateState(){
     if(x.repeatType==="monthly" && !Array.isArray(x.monthDays)) x.monthDays=[1];
     if(x.done && cleanDueOn(x,new Date())) setDone("clean",x.id,true);
   });
-  if(!state.transactions.length){
-    const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,"0");
-    state.transactions=[
-      {id:101,type:"income",amount:Number(state.income||2600),date:`${y}-${m}-01`,label:"Inkomen"},
-      {id:102,type:"expense",amount:214.5,date:`${y}-${m}-05`,label:"Boodschappen"},
-      {id:103,type:"expense",amount:48,date:`${y}-${m}-10`,label:"Vervoer"},
-      {id:104,type:"expense",amount:75,date:`${y}-${m}-16`,label:"Vrije tijd"}
-    ];
+
+  if((state.budgetSchemaVersion||0)<2){
+    // Oude voorbeeldtransacties uit eerdere Lumi-versies verwijderen.
+    state.transactions=state.transactions.filter(t=>![101,102,103,104].includes(Number(t.id)));
+    // Bestaande echte uitgaven krijgen een categorie zodat categorie-totalen uit transacties komen.
+    state.transactions.forEach(t=>{
+      if(t.type==="expense"){
+        t.category=t.category || t.label || "Overig";
+        t.description=t.description || t.label || t.category;
+      }
+      if(t.type==="income"){
+        t.description=t.description || t.label || "Inkomst";
+      }
+    });
+    // 'spent' is vanaf nu alleen legacy; uitgaven worden altijd uit transacties berekend.
+    state.budgets.forEach(b=>{ b.spent=0; });
+    state.budgetSchemaVersion=2;
   }
   save();
 }
@@ -161,8 +175,7 @@ function homePage(){
   const today = todayISO();
   const appts = state.agenda.filter(a=>a.date===today).sort((a,b)=>(a.startTime||"00:00").localeCompare(b.startTime||"00:00"));
   const cleaningToday = state.cleaning.filter(x=>cleanDueOn(x,new Date()));
-  const budgetSpent = state.budgets.reduce((s,x)=>s+x.spent,0);
-  const budgetTotal = state.budgets.reduce((s,x)=>s+x.limit,0);
+  const currentBudget=budgetTotals(today.slice(0,7));
   const dayMap={0:"Zondag",1:"Maandag",2:"Dinsdag",3:"Woensdag",4:"Donderdag",5:"Vrijdag",6:"Zaterdag"};
   const dinner = state.meals[dayMap[new Date().getDay()]]?.Diner || "Nog niet gepland";
   const taskRow=(kind,id,title,sub,color)=>`<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"} ${isDone(kind,id)?"done":""}">
@@ -178,7 +191,7 @@ function homePage(){
     </section>
     <div class="grid2">
       <button class="click-card home-budget-widget" data-go="budget">
-        <small>Budget deze maand</small><strong style="display:block;font-size:22px;margin-top:4px">${euro(budgetTotal-budgetSpent)}</strong>
+        <small>Nog uit te geven</small><strong style="display:block;font-size:22px;margin-top:4px">${euro(currentBudget.remaining)}</strong>
         <span class="go-label">Bekijk budget</span>
       </button>
       <button class="click-card home-shopping-widget" data-go="shopping">
@@ -279,90 +292,198 @@ function profilePage(){
 }
 
 
-function budgetTotals(){
-  const monthKey=todayISO().slice(0,7);
-  const monthTx=(state.transactions||[]).filter(t=>(t.date||"").startsWith(monthKey));
-  const extraIncome=monthTx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
-  const transactionExpenses=monthTx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
-  const totalIncome=Number(profile.income||0)+extraIncome;
-  const fixedExpenses=Number(profile.fixed||0);
-  const totalExpenses=fixedExpenses+transactionExpenses;
-  const savingsGoal=Math.max(0,Number(profile.savingsGoal||0));
-  const remaining=totalIncome-totalExpenses-savingsGoal;
-  return {extraIncome,transactionExpenses,totalIncome,fixedExpenses,totalExpenses,savingsGoal,remaining};
+function monthLabel(key){
+  const [y,m]=key.split("-").map(Number);
+  return new Date(y,m-1,1,12).toLocaleDateString("nl-NL",{month:"long",year:"numeric"});
 }
-
+function monthShift(key,delta){
+  const [y,m]=key.split("-").map(Number);
+  const d=new Date(y,m-1+delta,1,12);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+function budgetTransactions(monthKey=budgetMonth){
+  return (state.transactions||[]).filter(t=>(t.date||"").startsWith(monthKey));
+}
+function budgetTotals(monthKey=budgetMonth){
+  const tx=budgetTransactions(monthKey);
+  const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
+  const variableExpenses=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+  const savedThisMonth=tx.filter(t=>t.type==="saving").reduce((s,t)=>s+Number(t.amount||0),0);
+  const baseIncome=Math.max(0,Number(profile.income||0));
+  const fixedExpenses=Math.max(0,Number(profile.fixed||0));
+  const monthlySavingsGoal=Math.max(0,Number(profile.savingsGoal||0));
+  const totalIncome=baseIncome+extraIncome;
+  const totalExpenses=fixedExpenses+variableExpenses;
+  // Werkelijke spaarinleg telt mee; zolang die lager is dan het maanddoel blijft
+  // het resterende deel van het maanddoel gereserveerd. Zo wordt sparen nooit dubbel afgetrokken.
+  const savingsReserved=Math.max(monthlySavingsGoal,savedThisMonth);
+  const remaining=totalIncome-totalExpenses-savingsReserved;
+  return {baseIncome,extraIncome,totalIncome,fixedExpenses,variableExpenses,totalExpenses,monthlySavingsGoal,savedThisMonth,savingsReserved,remaining};
+}
+function categorySpent(name,monthKey=budgetMonth){
+  return budgetTransactions(monthKey)
+    .filter(t=>t.type==="expense" && (t.category||t.label)===name)
+    .reduce((s,t)=>s+Number(t.amount||0),0);
+}
+function goalSaved(goalId){
+  return (state.transactions||[])
+    .filter(t=>t.type==="saving" && String(t.goalId)===String(goalId))
+    .reduce((s,t)=>s+Number(t.amount||0),0);
+}
+function daysUntil(iso){
+  const end=dateObj(iso), now=dateObj(todayISO());
+  return Math.ceil((end-now)/86400000);
+}
+function goalTermText(goal){
+  const days=daysUntil(goal.targetDate);
+  if(days<0) return "Doeldatum verstreken";
+  if(days===0) return "Doeldatum vandaag";
+  const months=Math.max(1,Math.ceil(days/30.44));
+  return `${months} ${months===1?"maand":"maanden"} resterend`;
+}
+function transactionLabel(t){
+  if(t.type==="income") return t.description||t.label||"Inkomst";
+  if(t.type==="expense") return t.description||t.label||t.category||"Uitgave";
+  if(t.type==="saving"){
+    const g=(state.savingsGoals||[]).find(x=>String(x.id)===String(t.goalId));
+    return `Sparen${g?" · "+g.name:""}`;
+  }
+  return t.label||"Transactie";
+}
 function budgetPage(){
-  const {totalIncome,totalExpenses,savingsGoal,remaining}=budgetTotals();
+  const totals=budgetTotals(budgetMonth);
+  const tx=budgetTransactions(budgetMonth).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"") || Number(b.id)-Number(a.id));
+  const isCurrent=budgetMonth===todayISO().slice(0,7);
   return `
     <section class="hero theme-green">
       <h2>Budget <span class="brand-script">overzicht</span></h2>
-      <p>Alles van deze maand in één oogopslag.</p>
+      <p>Een helder beeld van wat er binnenkomt, uitgaat en overblijft.</p>
       <div class="decor-letter">B</div>
     </section>
+
+    <div class="budget-month-nav card">
+      <button class="secondary" type="button" data-budget-month="-1" aria-label="Vorige maand">‹</button>
+      <div><small>Maand</small><strong>${monthLabel(budgetMonth)}</strong></div>
+      <button class="secondary" type="button" data-budget-month="1" aria-label="Volgende maand">›</button>
+      ${!isCurrent?`<button class="link-btn budget-current-month" type="button" data-budget-current>Deze maand</button>`:""}
+    </div>
 
     <div class="grid2 budget-main-stats">
       <div class="stat budget-remaining">
         <small>Nog uit te geven</small>
-        <strong>${euro(remaining)}</strong>
+        <strong>${euro(totals.remaining)}</strong>
+        <span>na uitgaven en gereserveerd sparen</span>
       </div>
       <div class="stat budget-expenses">
         <small>Uitgaven</small>
-        <strong>${euro(totalExpenses)}</strong>
+        <strong>${euro(totals.totalExpenses)}</strong>
+        <span>vast + variabel</span>
       </div>
     </div>
 
-    <div class="budget-mini-summary">
-      <div><small>Verzamel inkomen</small><strong>${euro(totalIncome)}</strong></div>
-      <div><small>Spaardoel</small><strong>${euro(savingsGoal)}</strong></div>
+    <div class="budget-mini-summary budget-four-summary">
+      <div><small>Totaal inkomen</small><strong>${euro(totals.totalIncome)}</strong><span>${totals.extraIncome?`incl. ${euro(totals.extraIncome)} extra`:"basisinkomen"}</span></div>
+      <div><small>Vaste lasten</small><strong>${euro(totals.fixedExpenses)}</strong><span>uit je profiel</span></div>
+      <div><small>Variabele uitgaven</small><strong>${euro(totals.variableExpenses)}</strong><span>uit transacties</span></div>
+      <div><small>Sparen deze maand</small><strong>${euro(totals.savedThisMonth)}</strong><span>doel ${euro(totals.monthlySavingsGoal)}</span></div>
     </div>
 
     <div class="card savings-goal-card">
-      <div class="section-title"><h3>Spaardoel</h3><span class="pill">${euro(savingsGoal)} per maand</span></div>
-      <div class="savings-progress"><span style="width:${Math.max(0,Math.min(100,totalIncome ? (savingsGoal/totalIncome)*100 : 0))}%"></span></div>
+      <div class="section-title"><h3>Maandelijks spaardoel</h3><span class="pill">${euro(totals.monthlySavingsGoal)}</span></div>
+      <p class="subtle">Dit bedrag reserveert Lumi iedere maand in je berekening. Werkelijke inleg in lange-termijndoelen telt hier automatisch in mee.</p>
+      <div class="savings-progress"><span style="width:${totals.monthlySavingsGoal>0?Math.min(100,(totals.savedThisMonth/totals.monthlySavingsGoal)*100):0}%"></span></div>
+      <div class="goal-progress-copy">${euro(totals.savedThisMonth)} daadwerkelijk ingelegd van ${euro(totals.monthlySavingsGoal)} maanddoel</div>
       <form id="savingsGoalForm" class="inline-budget-form">
-        <label>Maandelijks spaardoel
-          <input id="budgetSavingsGoal" type="number" min="0" step="1" value="${savingsGoal}">
+        <label>Bedrag per maand
+          <input id="budgetSavingsGoal" type="number" min="0" step="0.01" value="${totals.monthlySavingsGoal}">
         </label>
         <button class="secondary" type="submit">Opslaan</button>
       </form>
     </div>
 
-    ${budgetChart()}
-
-    <div class="fab-row">
-      <button class="action-btn" data-add="income">Inkomst toevoegen</button>
-      <button class="action-btn" data-add="expense">Uitgave toevoegen</button>
+    <div class="section-title"><h3>Toevoegen</h3></div>
+    <div class="fab-row budget-add-row">
+      <button class="action-btn" data-add="income">Inkomst</button>
+      <button class="action-btn" data-add="expense">Uitgave</button>
+      <button class="action-btn" data-add="longGoal">Spaardoel voor later</button>
     </div>
 
     <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">Categorie toevoegen</button></div>
-    <div class="list">
+    <div class="list budget-category-list">
       ${state.budgets.map((b,i)=>{
-        const pct=b.limit>0 ? Math.min(100,Math.round((b.spent/b.limit)*100)) : 0;
-        return `<div class="card">
-          <div class="row-main"><strong>${b.name}</strong><small>${euro(b.spent)} van ${euro(b.limit)}</small></div>
+        const spent=categorySpent(b.name,budgetMonth);
+        const pct=b.limit>0 ? Math.min(100,Math.round((spent/Number(b.limit||0))*100)) : 0;
+        return `<div class="card budget-category-card">
+          <div class="row-main"><strong>${b.name}</strong><small>${euro(spent)} van ${euro(Number(b.limit||0))}</small></div>
           <div class="progress"><span style="width:${pct}%"></span></div>
-          <div class="fab-row" style="margin-top:10px"><button class="action-btn" data-expense-cat="${i}">Uitgave toevoegen</button></div>
+          <div class="budget-category-footer"><span>${pct}% gebruikt</span><button class="link-btn" data-expense-cat="${i}">Uitgave toevoegen</button></div>
         </div>`;
       }).join("")}
+    </div>
+
+    <div class="section-title"><h3>Spaardoelen voor later</h3><button class="link-btn" data-add="longGoal">Nieuw doel</button></div>
+    <div class="list long-goal-list">
+      ${(state.savingsGoals||[]).length ? state.savingsGoals.map(g=>{
+        const saved=goalSaved(g.id);
+        const target=Math.max(0,Number(g.targetAmount||0));
+        const pct=target?Math.min(100,(saved/target)*100):0;
+        const remaining=Math.max(0,target-saved);
+        return `<div class="card long-goal-card">
+          <div class="long-goal-head">
+            <div><strong>${g.name}</strong><small>${goalTermText(g)} · doel ${new Date(g.targetDate+"T12:00:00").toLocaleDateString("nl-NL",{day:"numeric",month:"short",year:"numeric"})}</small></div>
+            <span class="pill">${Math.round(pct)}%</span>
+          </div>
+          <div class="long-goal-amount"><strong>${euro(saved)}</strong><span>van ${euro(target)}</span></div>
+          <div class="savings-progress"><span style="width:${pct}%"></span></div>
+          <div class="goal-progress-copy">Nog ${euro(remaining)} te sparen</div>
+          <div class="fab-row compact-actions">
+            <button class="action-btn" data-goal-save="${g.id}">Inleg toevoegen</button>
+            <button class="secondary" data-edit-goal="${g.id}">Bewerken</button>
+            <button class="link-btn danger-link" data-delete-goal="${g.id}">Verwijderen</button>
+          </div>
+        </div>`;
+      }).join("") : `<div class="empty">Nog geen lange-termijn spaardoel. Maak bijvoorbeeld een doel voor vakantie, een buffer of een grote aankoop.</div>`}
+    </div>
+
+    ${budgetChart()}
+
+    <div class="section-title"><h3>Transacties</h3></div>
+    <div class="card transaction-card">
+      <div class="transaction-base-note">
+        <span>Basisinkomen <strong>+ ${euro(totals.baseIncome)}</strong></span>
+        <span>Vaste lasten <strong>− ${euro(totals.fixedExpenses)}</strong></span>
+      </div>
+      <div class="transaction-list">
+        ${tx.length ? tx.map(t=>`
+          <div class="transaction-row">
+            <div class="transaction-sign ${t.type}">
+              ${t.type==="income"?"+":t.type==="expense"?"−":"S"}
+            </div>
+            <div class="row-main">
+              <strong>${transactionLabel(t)}</strong>
+              <small>${new Date((t.date||todayISO())+"T12:00:00").toLocaleDateString("nl-NL",{day:"numeric",month:"short"})}${t.type==="expense" && t.category?` · ${t.category}`:""}</small>
+            </div>
+            <div class="transaction-amount ${t.type}">${t.type==="income"?"+":t.type==="expense"?"−":"−"} ${euro(Number(t.amount||0))}</div>
+            <button class="transaction-edit" type="button" data-edit-tx="${t.id}" aria-label="Transactie bewerken">Wijzig</button>
+          </div>`).join("") : `<div class="empty">Nog geen losse transacties in ${monthLabel(budgetMonth)}.</div>`}
+      </div>
     </div>`;
 }
 
 function budgetChart(){
-  const now=new Date(), months=[];
-  for(let i=5;i>=0;i--){ months.push(new Date(now.getFullYear(),now.getMonth()-i,1)); }
-  const currentKey=todayISO().slice(0,7);
+  const endParts=budgetMonth.split("-").map(Number);
+  const end=new Date(endParts[0],endParts[1]-1,1,12);
+  const months=[];
+  for(let i=5;i>=0;i--) months.push(new Date(end.getFullYear(),end.getMonth()-i,1,12));
   const data=months.map(d=>{
     const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    const tx=state.transactions.filter(t=>(t.date||"").startsWith(key));
+    const tx=budgetTransactions(key);
     const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
     const variableExpense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
-    const baseIncome=key===currentKey ? Number(profile.income||0) : 0;
-    const fixed=key===currentKey ? Number(profile.fixed||0) : 0;
     return {
       label:d.toLocaleDateString("nl-NL",{month:"short"}),
-      income:baseIncome+extraIncome,
-      expense:fixed+variableExpense
+      income:Number(profile.income||0)+extraIncome,
+      expense:Number(profile.fixed||0)+variableExpense
     };
   });
   const max=Math.max(1,...data.flatMap(x=>[x.income,x.expense]));
@@ -371,7 +492,7 @@ function budgetChart(){
     const x0=34+i*86, ih=(x.income/max)*125, eh=(x.expense/max)*125;
     return `<rect class="chart-income" x="${x0}" y="${base-ih}" width="${bar}" height="${ih}" rx="5"/><rect class="chart-expense" x="${x0+21}" y="${base-eh}" width="${bar}" height="${eh}" rx="5"/><text class="chart-label" x="${x0+18}" y="181" text-anchor="middle">${x.label}</text>`;
   }).join("");
-  return `<div class="card chart-card"><div class="section-title"><h3>Inkomsten en uitgaven</h3><span class="pill">6 maanden</span></div><div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafiek inkomsten en uitgaven"><line class="chart-grid" x1="24" y1="160" x2="548" y2="160"/>${bars}</svg></div><div class="chart-legend"><span><i class="legend-dot" style="background:#F5EFC6"></i>Inkomsten</span><span><i class="legend-dot" style="background:#4D0E12"></i>Uitgaven</span></div></div>`;
+  return `<div class="card chart-card"><div class="section-title"><h3>Inkomsten en uitgaven</h3><span class="pill">6 maanden</span></div><p class="subtle">De grafiek gebruikt je huidige vaste inkomen en vaste lasten als basis voor iedere maand, plus de transacties uit die maand.</p><div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafiek inkomsten en uitgaven"><line class="chart-grid" x1="24" y1="160" x2="548" y2="160"/>${bars}</svg></div><div class="chart-legend"><span><i class="legend-dot" style="background:#F5EFC6"></i>Inkomsten</span><span><i class="legend-dot" style="background:#4D0E12"></i>Uitgaven</span></div></div>`;
 }
 
 function mealsPage(){
@@ -535,6 +656,29 @@ function bindPageEvents(){
     };
   }
 
+
+  document.querySelectorAll("[data-budget-month]").forEach(b=>b.onclick=()=>{
+    budgetMonth=monthShift(budgetMonth,Number(b.dataset.budgetMonth));
+    localStorage.setItem("lumiBudgetMonth",budgetMonth);
+    render();
+  });
+  document.querySelectorAll("[data-budget-current]").forEach(b=>b.onclick=()=>{
+    budgetMonth=todayISO().slice(0,7);
+    localStorage.setItem("lumiBudgetMonth",budgetMonth);
+    render();
+  });
+  document.querySelectorAll("[data-edit-tx]").forEach(b=>b.onclick=()=>openModal("editTx",Number(b.dataset.editTx)));
+  document.querySelectorAll("[data-goal-save]").forEach(b=>b.onclick=()=>openModal("goalSave",Number(b.dataset.goalSave)));
+  document.querySelectorAll("[data-edit-goal]").forEach(b=>b.onclick=()=>openModal("longGoal",Number(b.dataset.editGoal)));
+  document.querySelectorAll("[data-delete-goal]").forEach(b=>b.onclick=()=>{
+    const id=Number(b.dataset.deleteGoal);
+    const goal=(state.savingsGoals||[]).find(g=>Number(g.id)===id);
+    if(goal && confirm(`Spaardoel "${goal.name}" verwijderen? De reeds geregistreerde inleg blijft in je transactiehistorie staan.`)){
+      state.savingsGoals=state.savingsGoals.filter(g=>Number(g.id)!==id);
+      save(); render();
+    }
+  });
+
   const profileForm=document.getElementById("profileForm");
   if(profileForm){
     profileForm.onsubmit=(e)=>{
@@ -592,7 +736,7 @@ function bindPageEvents(){
 
 function openModal(type, catIndex=null){
   const fields={
-    expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label></div>`},
+    expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Omschrijving<input id="fExpenseLabel" placeholder="Bijv. supermarkt"></label><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label><label>Datum<input id="fExpenseDate" type="date" value="${budgetMonth===todayISO().slice(0,7)?todayISO():budgetMonth+"-01"}"></label></div>`},
     agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid">
       <label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label>
       <label>Datum<input id="fDate" type="date" value="${todayISO()}"></label>
@@ -614,7 +758,34 @@ function openModal(type, catIndex=null){
       </label>
       <div id="cleanRepeatFields"></div>
     </div>`},
-    income:{title:"Inkomst toevoegen",html:`<div class="form-grid"><label>Omschrijving<input id="fIncomeLabel" placeholder="Bijv. salaris"></label><label>Bedrag<input id="fIncomeAmount" type="number" step="0.01" min="0"></label><label>Datum<input id="fIncomeDate" type="date" value="${todayISO()}"></label></div>`},
+    income:{title:"Extra inkomst toevoegen",html:`<div class="form-grid"><label>Omschrijving<input id="fIncomeLabel" placeholder="Bijv. bonus of verkoop"></label><label>Bedrag<input id="fIncomeAmount" type="number" step="0.01" min="0"></label><label>Datum<input id="fIncomeDate" type="date" value="${budgetMonth===todayISO().slice(0,7)?todayISO():budgetMonth+"-01"}"></label></div>`},
+    longGoal:{title:catIndex!==null?"Spaardoel bewerken":"Spaardoel voor later",html:(()=>{
+      const g=(state.savingsGoals||[]).find(x=>Number(x.id)===Number(catIndex))||{};
+      const defaultDate=(()=>{const d=new Date();d.setFullYear(d.getFullYear()+1);return isoLocal(d);})();
+      return `<div class="form-grid">
+        <label>Waar spaar je voor?<input id="fGoalName" value="${g.name||""}" placeholder="Bijv. vakantie, buffer of auto"></label>
+        <label>Doelbedrag<input id="fGoalAmount" type="number" min="0.01" step="0.01" value="${g.targetAmount||""}" placeholder="2500"></label>
+        <label>Doeldatum<input id="fGoalDate" type="date" value="${g.targetDate||defaultDate}" min="${todayISO()}"></label>
+      </div>`;
+    })()},
+    goalSave:{title:"Inleg toevoegen",html:(()=>{
+      const g=(state.savingsGoals||[]).find(x=>Number(x.id)===Number(catIndex));
+      return `<div class="form-grid"><p class="subtle">Inleg voor <strong>${g?.name||"spaardoel"}</strong>.</p><label>Bedrag<input id="fGoalSaveAmount" type="number" min="0.01" step="0.01" placeholder="100"></label><label>Datum<input id="fGoalSaveDate" type="date" value="${todayISO()}"></label></div>`;
+    })()},
+    editTx:{title:"Transactie bewerken",html:(()=>{
+      const t=(state.transactions||[]).find(x=>Number(x.id)===Number(catIndex));
+      if(!t) return `<div class="empty">Transactie niet gevonden.</div>`;
+      const cat=t.category||t.label||state.budgets[0]?.name||"Overig";
+      const cats=state.budgets.map(b=>`<option ${b.name===cat?"selected":""}>${b.name}</option>`).join("");
+      return `<div class="form-grid">
+        <label>Type<input value="${t.type==="income"?"Inkomst":t.type==="expense"?"Uitgave":"Sparen"}" disabled></label>
+        ${t.type!=="saving"?`<label>Omschrijving<input id="fEditTxLabel" value="${t.description||t.label||""}"></label>`:""}
+        ${t.type==="expense"?`<label>Categorie<select id="fEditTxCat">${cats}</select></label>`:""}
+        <label>Bedrag<input id="fEditTxAmount" type="number" min="0.01" step="0.01" value="${Number(t.amount||0)}"></label>
+        <label>Datum<input id="fEditTxDate" type="date" value="${t.date||todayISO()}"></label>
+        <button type="button" class="secondary danger-action" id="deleteTxBtn">Transactie verwijderen</button>
+      </div>`;
+    })()},
     cleanDays:{title:"Schoonmaakplanning aanpassen",html:`<div class="form-grid"><div id="editCleanRepeatFields"></div></div>`},
     budgetcat:{title:"Budgetcategorie toevoegen",html:`<div class="form-grid"><label>Naam<input id="fName" placeholder="Bijv. Kleding"></label><label>Maandbudget<input id="fLimit" type="number" min="0" step="1" placeholder="100"></label></div>`},
     meal:{title:"Maaltijd bewerken",html:`<div class="form-grid"><label>Dag<select id="fDay">${Object.keys(state.meals).map(d=>`<option>${d}</option>`).join("")}</select></label><label>Moment<select id="fSlot"><option>Ontbijt</option><option>Lunch</option><option>Diner</option></select></label><label>Maaltijd<input id="fMeal" placeholder="Bijv. pasta pesto"></label></div>`}
@@ -639,6 +810,17 @@ function openModal(type, catIndex=null){
 
   modal.dataset.editId=catIndex??"";
   modal.showModal();
+
+  if(type==="editTx"){
+    const del=document.getElementById("deleteTxBtn");
+    if(del) del.onclick=()=>{
+      if(confirm("Deze transactie verwijderen?")){
+        state.transactions=state.transactions.filter(t=>Number(t.id)!==Number(catIndex));
+        save(); modal.close(); render();
+      }
+    };
+  }
+
 
   if(type==="agenda"){
     const allDay=document.getElementById("fAllDay");
@@ -684,8 +866,52 @@ function openModal(type, catIndex=null){
 document.getElementById("modalForm").addEventListener("submit",e=>{
   e.preventDefault();
   const t=modal.dataset.type;
-  if(t==="expense"){ const i=Number(document.getElementById("fCat").value); const a=Math.max(0,Number(document.getElementById("fAmount").value||0)); state.budgets[i].spent += a; state.transactions.push({id:Date.now(),type:"expense",amount:a,date:todayISO(),label:state.budgets[i].name}); }
-  if(t==="income"){ const a=Math.max(0,Number(document.getElementById("fIncomeAmount").value||0)); const d=document.getElementById("fIncomeDate").value; const l=document.getElementById("fIncomeLabel").value||"Inkomst"; state.transactions.push({id:Date.now(),type:"income",amount:a,date:d,label:l}); }
+  if(t==="expense"){
+    const i=Number(document.getElementById("fCat").value);
+    const category=state.budgets[i]?.name||"Overig";
+    const a=Math.max(0,Number(document.getElementById("fAmount").value||0));
+    const d=document.getElementById("fExpenseDate").value||todayISO();
+    const l=document.getElementById("fExpenseLabel").value.trim()||category;
+    if(a<=0){ alert("Vul een bedrag groter dan 0 in."); return; }
+    state.transactions.push({id:Date.now(),type:"expense",amount:a,date:d,category,description:l,label:l});
+  }
+  if(t==="income"){
+    const a=Math.max(0,Number(document.getElementById("fIncomeAmount").value||0));
+    const d=document.getElementById("fIncomeDate").value||todayISO();
+    const l=document.getElementById("fIncomeLabel").value.trim()||"Extra inkomst";
+    if(a<=0){ alert("Vul een bedrag groter dan 0 in."); return; }
+    state.transactions.push({id:Date.now(),type:"income",amount:a,date:d,description:l,label:l});
+  }
+  if(t==="longGoal"){
+    const name=document.getElementById("fGoalName").value.trim();
+    const targetAmount=Math.max(0,Number(document.getElementById("fGoalAmount").value||0));
+    const targetDate=document.getElementById("fGoalDate").value;
+    if(!name || targetAmount<=0 || !targetDate){ alert("Vul een naam, doelbedrag en doeldatum in."); return; }
+    const existing=(state.savingsGoals||[]).find(g=>Number(g.id)===Number(modal.dataset.editId));
+    if(existing){ existing.name=name; existing.targetAmount=targetAmount; existing.targetDate=targetDate; }
+    else state.savingsGoals.push({id:Date.now(),name,targetAmount,targetDate,createdAt:todayISO()});
+  }
+  if(t==="goalSave"){
+    const goalId=Number(modal.dataset.editId);
+    const goal=(state.savingsGoals||[]).find(g=>Number(g.id)===goalId);
+    const amount=Math.max(0,Number(document.getElementById("fGoalSaveAmount").value||0));
+    const date=document.getElementById("fGoalSaveDate").value||todayISO();
+    if(!goal || amount<=0){ alert("Vul een bedrag groter dan 0 in."); return; }
+    state.transactions.push({id:Date.now(),type:"saving",amount,date,goalId,description:`Inleg ${goal.name}`,label:`Inleg ${goal.name}`});
+  }
+  if(t==="editTx"){
+    const tx=(state.transactions||[]).find(x=>Number(x.id)===Number(modal.dataset.editId));
+    if(!tx){ modal.close(); return; }
+    const amount=Math.max(0,Number(document.getElementById("fEditTxAmount").value||0));
+    const date=document.getElementById("fEditTxDate").value||todayISO();
+    if(amount<=0){ alert("Vul een bedrag groter dan 0 in."); return; }
+    tx.amount=amount; tx.date=date;
+    if(tx.type!=="saving"){
+      const label=document.getElementById("fEditTxLabel").value.trim()||(tx.type==="income"?"Inkomst":"Uitgave");
+      tx.description=label; tx.label=label;
+    }
+    if(tx.type==="expense") tx.category=document.getElementById("fEditTxCat").value;
+  }
   if(t==="agenda"){
     const allDay=document.getElementById("fAllDay").checked;
     const start=document.getElementById("fStartTime").value;
