@@ -13,6 +13,7 @@ const defaults = {
   transactions: [],
   savingsGoals: [],
   budgetCorrections: {},
+  categoryCorrections: {},
   mealIngredients: {},
   meals: {
     Maandag:{Ontbijt:"Overnight oats",Lunch:"Salade",Diner:"Pasta pesto"},
@@ -206,6 +207,7 @@ function migrateState(){
   }
 
   state.budgetCorrections=state.budgetCorrections && typeof state.budgetCorrections==="object" ? state.budgetCorrections : {};
+  state.categoryCorrections=state.categoryCorrections && typeof state.categoryCorrections==="object" ? state.categoryCorrections : {};
   state.mealIngredients=state.mealIngredients && typeof state.mealIngredients==="object" ? state.mealIngredients : {};
   state.shopping=Array.isArray(state.shopping)?state.shopping:[];
   state.shopping=state.shopping.map((x,i)=>typeof x==="string"?{id:Date.now()+i,text:x,done:false}:{id:x.id||Date.now()+i,text:x.text||"",done:!!x.done});
@@ -395,6 +397,7 @@ function budgetTotals(monthKey=budgetMonth){
   const tx=budgetTransactions(monthKey);
   const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
   const transactionExpenses=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+  const categoryCorrectionTotal=Object.values((state.categoryCorrections||{})[monthKey]||{}).reduce((s,v)=>s+Number(v||0),0);
   const savedThisMonth=tx.filter(t=>t.type==="saving").reduce((s,t)=>s+Number(t.amount||0),0);
   const baseIncome=Math.max(0,Number(profile.income||0));
   const fixedExpenses=Math.max(0,Number(profile.fixed||0));
@@ -403,21 +406,25 @@ function budgetTotals(monthKey=budgetMonth){
   const correction=(state.budgetCorrections||{})[monthKey]||{remaining:0,expenses:0};
   const expenseCorrection=Number(correction.expenses||0);
   const remainingCorrection=Number(correction.remaining||0);
-  const variableExpenses=transactionExpenses+expenseCorrection;
+  const variableExpenses=transactionExpenses+categoryCorrectionTotal+expenseCorrection;
   const totalExpenses=fixedExpenses+variableExpenses;
   const savingsReserved=Math.max(monthlySavingsGoal,savedThisMonth);
   const calculatedRemaining=totalIncome-totalExpenses-savingsReserved;
   const remaining=calculatedRemaining+remainingCorrection;
   return {
-    baseIncome,extraIncome,totalIncome,fixedExpenses,transactionExpenses,expenseCorrection,
+    baseIncome,extraIncome,totalIncome,fixedExpenses,transactionExpenses,categoryCorrectionTotal,expenseCorrection,
     variableExpenses,totalExpenses,monthlySavingsGoal,savedThisMonth,savingsReserved,
     calculatedRemaining,remainingCorrection,remaining
   };
 }
+function categoryCorrection(name,monthKey=budgetMonth){
+  return Number((state.categoryCorrections||{})[monthKey]?.[name]||0);
+}
 function categorySpent(name,monthKey=budgetMonth){
-  return budgetTransactions(monthKey)
+  const transactionSpent=budgetTransactions(monthKey)
     .filter(t=>t.type==="expense" && (t.category||t.label)===name)
     .reduce((s,t)=>s+Number(t.amount||0),0);
+  return transactionSpent + categoryCorrection(name,monthKey);
 }
 function goalSaved(goalId){
   return (state.transactions||[])
@@ -510,10 +517,10 @@ function budgetPage(){
       ${state.budgets.map((b,i)=>{
         const spent=categorySpent(b.name,budgetMonth);
         const pct=b.limit>0 ? Math.min(100,Math.round((spent/Number(b.limit||0))*100)) : 0;
-        return `<div class="card budget-category-card">
+        return `<div class="card budget-category-card clickable-budget-category" data-open-category="${i}" role="button" tabindex="0">
           <div class="row-main"><strong>${b.name}</strong><small>${euro(spent)} van ${euro(Number(b.limit||0))}</small></div>
           <div class="progress"><span style="width:${pct}%"></span></div>
-          <div class="budget-category-footer"><span>${pct}% gebruikt</span><button class="link-btn" data-expense-cat="${i}">Uitgave toevoegen</button></div>
+          <div class="budget-category-footer"><span>${pct}% gebruikt · tik voor details</span><button class="link-btn" data-expense-cat="${i}">Uitgave toevoegen</button></div>
         </div>`;
       }).join("")}
     </div>
@@ -855,6 +862,13 @@ function bindPageEvents(){
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{currentPage=b.dataset.go;render();});
   document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openModal(b.dataset.add));
   document.querySelectorAll("[data-expense-cat]").forEach(b=>b.onclick=()=>openModal("expense",Number(b.dataset.expenseCat)));
+  document.querySelectorAll("[data-open-category]").forEach(card=>{
+    card.onclick=(e)=>{
+      if(e.target.closest("[data-expense-cat]")) return;
+      openModal("budgetCategory",Number(card.dataset.openCategory));
+    };
+    card.onkeydown=(e)=>{ if(e.key==="Enter" || e.key===" "){ e.preventDefault(); openModal("budgetCategory",Number(card.dataset.openCategory)); } };
+  });
   document.querySelectorAll("[data-adjust-budget]").forEach(b=>b.onclick=()=>openModal("budgetAdjust",b.dataset.adjustBudget));
   document.querySelectorAll("[data-meal-shopping]").forEach(b=>b.onclick=(e)=>{
     e.preventDefault();
@@ -917,6 +931,34 @@ function openModal(type, catIndex=null){
     editShopping:{title:"Boodschap bewerken",html:(()=>{
       const item=state.shopping.find(x=>Number(x.id)===Number(catIndex));
       return `<div class="form-grid"><label>Artikel<input id="fEditShopping" value="${shoppingItemText(item)}"></label></div>`;
+    })()},
+    budgetCategory:{title:"Categorie bekijken",html:(()=>{
+      const b=state.budgets[Number(catIndex)];
+      if(!b) return `<div class="empty">Categorie niet gevonden.</div>`;
+      const categoryTx=budgetTransactions(budgetMonth)
+        .filter(t=>t.type==="expense" && (t.category||t.label)===b.name)
+        .slice().sort((a,c)=>(c.date||"").localeCompare(a.date||"") || Number(c.id)-Number(a.id));
+      const correction=categoryCorrection(b.name,budgetMonth);
+      const total=categorySpent(b.name,budgetMonth);
+      return `<div class="form-grid budget-category-detail">
+        <div class="category-detail-head">
+          <div><small>${monthLabel(budgetMonth)}</small><strong>${b.name}</strong></div>
+          <div class="category-detail-total">${euro(total)}</div>
+        </div>
+        <label>Totaal uitgegeven aanpassen
+          <input id="fCategoryTarget" type="number" min="0" step="0.01" value="${Number(total).toFixed(2)}">
+          <small>Heb je per ongeluk een verkeerd totaal? Vul hier gewoon het juiste bedrag in.</small>
+        </label>
+        ${correction?`<div class="category-correction-line"><span>Handmatige correctie</span><strong>${correction>=0?"+":""}${euro(correction)}</strong></div>`:""}
+        <div class="category-detail-title"><strong>Ingevoerde uitgaven</strong><span>${categoryTx.length}</span></div>
+        <div class="category-transaction-list">
+          ${categoryTx.length?categoryTx.map(t=>`
+            <button class="category-transaction-row" type="button" data-category-edit-tx="${t.id}">
+              <span><strong>${t.description||t.label||"Uitgave"}</strong><small>${new Date((t.date||todayISO())+"T12:00:00").toLocaleDateString("nl-NL",{day:"numeric",month:"short",year:"numeric"})}</small></span>
+              <span class="category-transaction-amount">− ${euro(Number(t.amount||0))}<small>wijzig</small></span>
+            </button>`).join(""):`<div class="empty">Nog geen losse uitgaven in deze categorie.</div>`}
+        </div>
+      </div>`;
     })()},
     budgetAdjust:{title:catIndex==="remaining"?"Nog uit te geven aanpassen":"Uitgaven aanpassen",html:(()=>{
       const totals=budgetTotals(budgetMonth);
@@ -1037,6 +1079,12 @@ function openModal(type, catIndex=null){
     allDay.addEventListener("change",toggle); toggle();
   }
 
+  if(type==="budgetCategory"){
+    document.querySelectorAll("[data-category-edit-tx]").forEach(b=>b.onclick=()=>{
+      openModal("editTx",Number(b.dataset.categoryEditTx));
+    });
+  }
+
   if(type==="cleaning"){
     const sel=document.getElementById("fRepeatType");
     const wrapper=document.getElementById("cleanRepeatFields");
@@ -1146,6 +1194,18 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
     const item=state.shopping.find(x=>Number(x.id)===Number(modal.dataset.editId));
     const v=document.getElementById("fEditShopping").value.trim();
     if(v && item) item.text=v;
+  }
+  if(t==="budgetCategory"){
+    const b=state.budgets[Number(modal.dataset.editId)];
+    const target=Number(document.getElementById("fCategoryTarget").value);
+    if(!b || !Number.isFinite(target) || target<0){ alert("Vul een geldig bedrag in."); return; }
+    const current=categorySpent(b.name,budgetMonth);
+    state.categoryCorrections=state.categoryCorrections||{};
+    state.categoryCorrections[budgetMonth]=state.categoryCorrections[budgetMonth]||{};
+    state.categoryCorrections[budgetMonth][b.name]=Number(state.categoryCorrections[budgetMonth][b.name]||0)+(target-current);
+    if(Math.abs(state.categoryCorrections[budgetMonth][b.name]||0)<0.005){
+      delete state.categoryCorrections[budgetMonth][b.name];
+    }
   }
   if(t==="budgetAdjust"){
     const kind=modal.dataset.editId;
