@@ -229,3 +229,107 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
 .schedule-mark{width:24px;height:24px;border:1px solid var(--line);border-radius:50%;flex:0 0 auto;opacity:.55}
 .row-main{min-width:0}
 .row-main strong,.row-main small{overflow-wrap:anywhere}
+
+/* Lumi — sterkere onderwerp-kleurcodering */
+
+/* HOME: widgets nemen de kleur van hun bestemming over */
+.home-budget-widget{
+  background:linear-gradient(145deg,#5b3a31,var(--brown))!important;
+  border-color:var(--brown)!important;
+  color:#fff9ef!important;
+}
+.home-budget-widget small,
+.home-budget-widget .go-label{color:#f3e8dc!important}
+
+.home-shopping-widget{
+  background:linear-gradient(145deg,#fffdf2,var(--cream))!important;
+  border-color:#ded18e!important;
+  color:var(--brown)!important;
+}
+.home-shopping-widget .go-label{color:var(--brown)!important}
+
+.home-task-agenda{
+  background:linear-gradient(90deg,#f7eeee,#fffdf9)!important;
+  border-left:5px solid var(--red)!important;
+}
+.home-task-meal{
+  background:linear-gradient(90deg,#fff9d9,#fffdf9)!important;
+  border-left:5px solid #cdbb80!important;
+}
+.home-task-clean{
+  background:linear-gradient(90deg,#e8f0f7,#fffdf9)!important;
+  border-left:5px solid var(--blue)!important;
+}
+.home-task-agenda .pill{background:#f0dfdf;color:var(--red)}
+.home-task-meal .pill{background:#f4ebbd;color:var(--brown)}
+.home-task-clean .pill{background:#dce8f2;color:#35516c}
+
+/* BUDGET: donkerbruin als vaste identiteit */
+.page-budget .section-title h3,
+.page-budget .link-btn{color:var(--brown)}
+.page-budget .stat{
+  background:#f0e8df;
+  border-color:#d7c7b8;
+}
+.page-budget .card:not(.chart-card){
+  border-top:4px solid var(--brown);
+}
+.page-budget .action-btn{
+  background:var(--brown);
+  border-color:var(--brown);
+  color:#fff9ef;
+}
+.page-budget .progress>span{background:var(--brown)!important}
+
+/* MAALTIJDEN + BOODSCHAPPEN: crème/geel */
+.page-meals .section-title h3,
+.page-shopping .section-title h3{color:#725d25}
+.page-meals .card,
+.page-shopping .card{
+  border-top:4px solid #d4c16d;
+}
+.page-meals .row,
+.page-shopping .row{
+  background:#fffdf0;
+}
+.page-meals .action-btn,
+.page-shopping .action-btn{
+  background:var(--cream);
+  border-color:#d9c97e;
+  color:var(--brown);
+}
+.page-meals .task-check:checked{background:#b69b3e;border-color:#b69b3e}
+
+/* AGENDA: bordeauxrood */
+.page-agenda .section-title h3,
+.page-agenda .link-btn{color:var(--red)}
+.page-agenda .row{
+  border-left:4px solid rgba(77,14,18,.55);
+  background:#fffafa;
+}
+.page-agenda .action-btn{
+  background:var(--red);
+  border-color:var(--red);
+  color:#fff9ef;
+}
+.page-agenda .task-check:checked{background:var(--red);border-color:var(--red)}
+.page-agenda .calendar-head h3{color:var(--red)}
+
+/* SCHOONMAAK: lichtblauw */
+.page-cleaning .section-title h3,
+.page-cleaning .link-btn{color:#496985}
+.page-cleaning .row{
+  border-left:4px solid var(--blue);
+  background:#f8fbfd;
+}
+.page-cleaning .action-btn{
+  background:var(--blue);
+  border-color:#8faac5;
+  color:var(--ink);
+}
+.page-cleaning .pill{background:#dce8f2;color:#35516c}
+
+/* Afgevinkt blijft zichtbaar maar zachter in de eigen onderwerpstint */
+.page-agenda .task-row.done{background:#f4eaea}
+.page-meals .task-row.done{background:#f5f0d9}
+.page-cleaning .task-row.done{background:#e9f0f5}

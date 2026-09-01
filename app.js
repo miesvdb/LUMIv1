@@ -162,10 +162,10 @@ function homePage(){
   const budgetTotal = state.budgets.reduce((s,x)=>s+x.limit,0);
   const dayMap={0:"Zondag",1:"Maandag",2:"Dinsdag",3:"Woensdag",4:"Donderdag",5:"Vrijdag",6:"Zaterdag"};
   const dinner = state.meals[dayMap[new Date().getDay()]]?.Diner || "Nog niet gepland";
-  const taskRow=(kind,id,title,sub,color)=>`<label class="row task-row ${isDone(kind,id)?"done":""}">
+  const taskRow=(kind,id,title,sub,color)=>`<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"} ${isDone(kind,id)?"done":""}">
       <input class="task-check" type="checkbox" data-home-task="${kind}" data-task-id="${id}" ${isDone(kind,id)?"checked":""}>
       <div class="row-main"><strong>${title}</strong><small>${sub}</small></div>
-      <span class="pill" style="border-left:3px solid ${color}">${isDone(kind,id)?"Gedaan":"Vandaag"}</span>
+      <span class="pill">${isDone(kind,id)?"Gedaan":"Vandaag"}</span>
     </label>`;
   return `
     <section class="hero theme-blue">
@@ -174,11 +174,11 @@ function homePage(){
       <div class="decor-letter">L</div>
     </section>
     <div class="grid2">
-      <button class="click-card" data-go="budget">
+      <button class="click-card home-budget-widget" data-go="budget">
         <small>Budget deze maand</small><strong style="display:block;font-size:22px;margin-top:4px">${euro(budgetTotal-budgetSpent)}</strong>
         <span class="go-label">Bekijk budget</span>
       </button>
-      <button class="click-card" data-go="shopping">
+      <button class="click-card home-shopping-widget" data-go="shopping">
         <small>Boodschappenlijst</small><strong style="display:block;font-size:22px;margin-top:4px">${state.shopping.length} artikelen</strong>
         <span class="go-label">Open lijst voor vandaag</span>
       </button>
