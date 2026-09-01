@@ -685,3 +685,29 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
   color:var(--muted);
   font-size:12px;
 }
+
+/* Lumi — Maaltijden: oranje tekst vervangen door donkerbruin */
+.page-meals,
+.page-meals h1,
+.page-meals h2,
+.page-meals h3,
+.page-meals h4,
+.page-meals strong,
+.page-meals .row-main,
+.page-meals .row-main strong,
+.page-meals .meal-slot,
+.page-meals .meal-slot small,
+.page-meals .meal-slot span,
+.page-meals .section-title,
+.page-meals .section-title h3,
+.page-meals .link-btn,
+.page-meals button,
+.page-meals .pill,
+.page-meals .badge{
+  color:#4A2E27!important;
+}
+.page-meals .subtle,
+.page-meals .row-main small,
+.page-meals .meal-slot em{
+  color:#6F5A52!important;
+}
