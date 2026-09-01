@@ -215,7 +215,7 @@ function budgetPage(){
     </div>
     ${budgetChart()}
     <div class="fab-row"><button class="action-btn" data-add="income">Inkomst toevoegen</button><button class="action-btn" data-add="expense">Uitgave toevoegen</button></div>
-    <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">Categorie toevoegen</button></div>
+    <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">＋ categorie</button></div>
     <div class="list">
       ${state.budgets.map((b,i)=>{
         const pct=Math.min(100,Math.round((b.spent/b.limit)*100));
@@ -270,7 +270,7 @@ function mealsPage(){
     </div>
     <div class="section-title"><h3>Boodschappenlijst</h3><button class="link-btn" data-add="shopping">＋ item</button></div>
     <div class="list">
-      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
+      ${state.shopping.length?state.shopping.map((x,i)=>`<div class="row"><div class="badge theme-orange">✓</div><div class="row-main"><strong>${x}</strong></div><button class="link-btn" data-remove-shopping="${i}">verwijder</button></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
     </div>`;
 }
 
@@ -384,10 +384,10 @@ function cleaningPage(){
     <div class="section-title"><h3>Schema</h3><button class="link-btn" data-add="cleaning">Taak toevoegen</button></div>
     <div class="list">
       ${state.cleaning.map(x=>{
-        const isDue=cleanDueOn(x,new Date());
-        return `<div class="row cleaning-task task-row ${isDue && isDone("clean",x.id)?"done":""}">
-          ${isDue?`<input class="task-check" type="checkbox" data-clean="${x.id}" ${isDone("clean",x.id)?"checked":""}>`:`<span class="schedule-mark" aria-hidden="true"></span>`}
-          <div class="row-main"><strong>${x.task}</strong><small>${cleaningScheduleLabel(x)}${isDue?" · Vandaag":""}</small></div>
+        const due=cleanDueOn(x,new Date());
+        return `<div class="row cleaning-task task-row ${due && isDone("clean",x.id)?"done":""}">
+          ${due?`<input class="task-check" type="checkbox" data-clean="${x.id}" ${isDone("clean",x.id)?"checked":""}>`:`<span class="schedule-mark" aria-hidden="true"></span>`}
+          <div class="row-main"><strong>${x.task}</strong><small>${cleaningScheduleLabel(x)}${due?" · Vandaag":""}</small></div>
           <button class="link-btn" data-edit-clean="${x.id}">planning</button>
         </div>`;
       }).join("")}
@@ -428,8 +428,8 @@ function openModal(type, catIndex=null){
   const fields={
     expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label></div>`},
     agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid">
-      <label>Titel<input id="fTitle" required placeholder="Bijv. tandarts"></label>
-      <label>Datum<input id="fDate" type="date" required value="${todayISO()}"></label>
+      <label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label>
+      <label>Datum<input id="fDate" type="date" value="${todayISO()}"></label>
       <label class="switch-line"><input id="fAllDay" type="checkbox"> Hele dag</label>
       <div class="time-row" id="timeFields">
         <label>Begintijd<input id="fStartTime" type="time" value="09:00"></label>
@@ -453,7 +453,6 @@ function openModal(type, catIndex=null){
     budgetcat:{title:"Budgetcategorie toevoegen",html:`<div class="form-grid"><label>Naam<input id="fName" placeholder="Bijv. Kleding"></label><label>Maandbudget<input id="fLimit" type="number" min="0" step="1" placeholder="100"></label></div>`},
     meal:{title:"Maaltijd bewerken",html:`<div class="form-grid"><label>Dag<select id="fDay">${Object.keys(state.meals).map(d=>`<option>${d}</option>`).join("")}</select></label><label>Moment<select id="fSlot"><option>Ontbijt</option><option>Lunch</option><option>Diner</option></select></label><label>Maaltijd<input id="fMeal" placeholder="Bijv. pasta pesto"></label></div>`}
   };
-  if(!fields[type]) return;
   modalTitle.textContent=fields[type].title;
   modalBody.innerHTML=fields[type].html;
   modal.dataset.type=type;
@@ -535,10 +534,7 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
     if(v){
       const task={id:Date.now(),task:v,freq:"Aangepast",done:false};
       if(mode==="weekly"){ task.repeatType="weekly"; task.days=[...document.querySelectorAll('input[name="newWeekDay"]:checked')].map(x=>x.value); }
-      else {
-        task.repeatType="monthly";
-        task.monthDays=[...new Set([...document.querySelectorAll('input[name="newMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))))].sort((a,b)=>a-b);
-      }
+      else { task.repeatType="monthly"; task.monthDays=[...new Set([...document.querySelectorAll('input[name="newMonthDay"]')].map(x=>Math.max(1,Math.min(31,Number(x.value||1)))))].sort((a,b)=>a-b); }
       state.cleaning.push(task);
     }
   }

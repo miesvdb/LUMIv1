@@ -1,19 +1,26 @@
-# Lumi v5 — herstelde versie
+# Lumi — opnieuw opgebouwd vanaf versie 3
 
-Deze versie herstelt de JavaScript-fout waardoor Lumi v4 niet meer reageerde.
+Dit pakket is opnieuw gemaakt vanaf de oorspronkelijke Lumi v3 ZIP, dus niet vanaf v4 of v5.
 
-Gecontroleerde functies:
-- Vandaag-scherm en navigatie.
-- Dagelijkse taken afvinken; status blijft zichtbaar op Agenda, Maaltijden en Schoonmaak.
-- Klikbaar budgetblok en boodschappenblok op Vandaag.
-- Budgetgrafiek voor inkomsten en uitgaven.
-- Agenda in week-, maand- en jaaroverzicht.
-- Afspraken met begintijd, eindtijd of 'hele dag'.
-- Schoonmaaktaken op vaste weekdagen.
-- Schoonmaaktaken 1 of 2 keer per maand.
-- Schoonmaaktaken verschijnen alleen op de juiste dag op Vandaag.
-- Persoonlijke onboarding en lokale opslag.
-- Pantone-geïnspireerd Lumi-kleurenpalet.
-- Geen emoji-decoratie.
+Belangrijk:
+- De twee JavaScript-syntaxfouten in v3 zijn hersteld.
+- `app.js` is gecontroleerd met Node.
+- De app-start is uitgevoerd in een DOM-runtime test: het dynamische dashboard wordt daadwerkelijk gerenderd.
 
-Voor GitHub Pages: vervang alle bestaande appbestanden door deze bestanden en wacht op de nieuwe Pages-deployment.
+Behouden:
+- afvinkbare Vandaag-taken en gekoppelde status;
+- budgetgrafiek;
+- week-, maand- en jaaragenda;
+- begin- en eindtijd;
+- hele-dagafspraak;
+- klikbare boodschappenlijst;
+- schoonmaak op vaste dagen;
+- schoonmaak 1 of 2 keer per maand;
+- persoonlijke onboarding en lokale opslag.
+
+Na v3 toegepast:
+- het gekozen crème / bordeaux / lichtblauw / donkerbruin kleurenpalet;
+- elegante Bodoni/Didot-achtige koppen;
+- rustigere styling zonder emoji.
+
+Cache: lumi-v3-rebuilt-1
