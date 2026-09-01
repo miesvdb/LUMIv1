@@ -380,7 +380,10 @@ function homePage(){
   const childrenToday=profile.childrenEnabled?(state.children||[]).map(child=>({
     child,
     plans:childPlansOn(child,today),
-    carry:childCarryOn(child,today)
+    carry:childCarryOn(child,today),
+    routines:childRoutinesOn(child,today),
+    food:childFoodOn(child,today),
+    meal:childMealForDay(child,dayMap[new Date().getDay()])
   })):[];
 
   const taskRow=(kind,id,title,sub,color)=>`<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"} ${isDone(kind,id)?"done":""}">
@@ -408,7 +411,7 @@ function homePage(){
     <button class="click-card home-child-widget" data-go="children">
       <small>Kinderen vandaag</small>
       <strong>${childrenToday.map(x=>x.child.name).join(" · ")}</strong>
-      <span>${childrenToday.reduce((s,x)=>s+x.plans.length,0)} planning · ${childrenToday.reduce((s,x)=>s+x.carry.length,0)} mee te nemen</span>
+      <span>${childrenToday.reduce((s,x)=>s+x.plans.length,0)} planning · ${childrenToday.reduce((s,x)=>s+x.carry.length,0)} mee · ${childrenToday.reduce((s,x)=>s+x.routines.length,0)} routines</span>
       <span class="go-label">Open kindoverzicht</span>
     </button>`:""}
     <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-go="agenda">bekijk agenda</button></div>
@@ -416,11 +419,32 @@ function homePage(){
       ${appts.map(a=>taskRow("agenda",a.id,`${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`} · ${a.title}`,"Agenda","#4D0E12")).join("")}
       ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd","#CDBB80")}
       ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,cleaningScheduleLabel(x),"#A5BCD6")).join("")}
-      ${childrenToday.map(({child,plans,carry})=>`
-        ${plans.map(p=>`<div class="row task-row home-task-child"><div class="row-main"><strong>${p.allDay?"Hele dag":p.startTime||""} · ${child.name}: ${p.title}</strong><small>${p.location||"Planning kind"}</small></div><span class="pill">Kind</span></div>`).join("")}
-        ${carry.map(x=>`<label class="row task-row home-task-child ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}"><input class="task-check" type="checkbox" data-home-child-carry="${child.id}|${x.id}" ${isDone("childcarry",`${child.id}-${x.id}`,today)?"checked":""}><div class="row-main"><strong>${child.name}: ${x.text}</strong><small>Meenemen</small></div><span class="pill">Kind</span></label>`).join("")}
-      `).join("")}
-      ${!appts.length && !cleaningToday.length && !childrenToday.some(x=>x.plans.length||x.carry.length) ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
+      ${childrenToday.map(({child,plans,carry,routines,food,meal})=>{
+        const planRows=plans.map(p=>`<label class="row task-row home-task-child ${isDone("childplan",`${child.id}-${p.id}`,today)?"done":""}">
+          <input class="task-check" type="checkbox" data-home-child-plan="${child.id}|${p.id}" ${isDone("childplan",`${child.id}-${p.id}`,today)?"checked":""}>
+          <div class="row-main"><strong>${p.allDay?"Hele dag":p.startTime||""} · ${child.name}: ${p.title}</strong><small>${p.location||"Planning kind"}</small></div><span class="pill">Kind</span>
+        </label>`).join("");
+        const carryRows=carry.map(x=>`<label class="row task-row home-task-child ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}">
+          <input class="task-check" type="checkbox" data-home-child-carry="${child.id}|${x.id}" ${isDone("childcarry",`${child.id}-${x.id}`,today)?"checked":""}>
+          <div class="row-main"><strong>${child.name}: ${x.text}</strong><small>Meenemen</small></div><span class="pill">Kind</span>
+        </label>`).join("");
+        const routineRows=routines.map(r=>`<label class="row task-row home-task-child ${isDone("childroutine",`${child.id}-${r.id}`,today)?"done":""}">
+          <input class="task-check" type="checkbox" data-home-child-routine="${child.id}|${r.id}" ${isDone("childroutine",`${child.id}-${r.id}`,today)?"checked":""}>
+          <div class="row-main"><strong>${r.time?`${r.time} · `:""}${child.name}: ${r.title}</strong><small>Routine</small></div><span class="pill">Kind</span>
+        </label>`).join("");
+        const mealRow=meal?`<label class="row task-row home-task-child ${isDone("childmeal",child.id,today)?"done":""}">
+          <input class="task-check" type="checkbox" data-home-child-meal="${child.id}" ${isDone("childmeal",child.id,today)?"checked":""}>
+          <div class="row-main"><strong>${child.name}: avondeten ${meal}</strong><small>Eten</small></div><span class="pill">Kind</span>
+        </label>`:"";
+        const foodRow=food.length?`<label class="row task-row home-task-child ${isDone("childfood",child.id,today)?"done":""}">
+          <input class="task-check" type="checkbox" data-home-child-food="${child.id}" ${isDone("childfood",child.id,today)?"checked":""}>
+          <div class="row-main"><strong>${child.name}: eten bijgehouden</strong><small>${food.length} eetmoment(en) ingevuld</small></div><span class="pill">Kind</span>
+        </label>`:`<button class="row home-task-child home-child-quick-add" type="button" data-home-child-food-add="${child.id}">
+          <div class="row-main"><strong>${child.name}: eten nog niet bijgehouden</strong><small>Tik om een eetmoment toe te voegen</small></div><span class="pill">Kind</span>
+        </button>`;
+        return planRows+carryRows+routineRows+mealRow+foodRow;
+      }).join("")}
+      ${!appts.length && !cleaningToday.length && !childrenToday.some(x=>x.plans.length||x.carry.length||x.routines.length||x.food.length||x.meal) ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
     </div>
     <div class="section-title"><h3>Snel toevoegen</h3></div>
     <div class="fab-row">
@@ -464,10 +488,18 @@ function childrenPage(){
     <div class="card child-today-card">
       <div class="section-title child-card-title"><h3>Vandaag voor ${child.name}</h3><span>${new Date().toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</span></div>
       <div class="child-today-grid">
-        <div><small>Planning</small><strong>${plans.length?plans.map(p=>`${p.allDay?"Hele dag":p.startTime||""} ${p.title}`).join(" · "):"Geen afspraak"}</strong></div>
-        <div><small>Eten</small><strong>${food.length?`${food.length} moment(en) bijgehouden`:meal?`Gepland: ${meal}`:"Nog niets bijgehouden"}</strong></div>
-        <div><small>Meenemen</small><strong>${carry.length?carry.map(x=>x.text).join(" · "):"Niets extra"}</strong></div>
-        <div><small>Routine</small><strong>${routines.length?`${routines.filter(r=>isDone("childroutine",`${child.id}-${r.id}`,today)).length}/${routines.length} gedaan`:"Geen routine"}</strong></div>
+        <button type="button" class="child-today-action" data-child-today-action="childPlan">
+          <small>Planning</small><strong>${plans.length?plans.map(p=>`${p.allDay?"Hele dag":p.startTime||""} ${p.title}`).join(" · "):"Geen afspraak"}</strong><span>Toevoegen of aanpassen</span>
+        </button>
+        <button type="button" class="child-today-action" data-child-today-action="childFood">
+          <small>Eten</small><strong>${food.length?`${food.length} moment(en) bijgehouden`:meal?`Gepland: ${meal}`:"Nog niets bijgehouden"}</strong><span>Eetmoment toevoegen</span>
+        </button>
+        <button type="button" class="child-today-action" data-child-today-action="childCarry">
+          <small>Meenemen</small><strong>${carry.length?carry.map(x=>x.text).join(" · "):"Niets extra"}</strong><span>Item toevoegen</span>
+        </button>
+        <button type="button" class="child-today-action" data-child-today-action="childRoutine">
+          <small>Routine</small><strong>${routines.length?`${routines.filter(r=>isDone("childroutine",`${child.id}-${r.id}`,today)).length}/${routines.length} gedaan`:"Geen routine"}</strong><span>Routine toevoegen</span>
+        </button>
       </div>
     </div>
 
@@ -1110,6 +1142,7 @@ function bindPageEvents(){
   });
   document.querySelectorAll("[data-select-child]").forEach(b=>b.onclick=()=>{selectChild(Number(b.dataset.selectChild));render();});
   document.querySelectorAll("[data-child-add]").forEach(b=>b.onclick=()=>openModal(b.dataset.childAdd));
+  document.querySelectorAll("[data-child-today-action]").forEach(b=>b.onclick=()=>openModal(b.dataset.childTodayAction));
   document.querySelectorAll("[data-child-shopping]").forEach(b=>b.onclick=()=>openModal("shopping"));
   document.querySelectorAll("[data-go-child]").forEach(b=>b.onclick=()=>{selectChild(Number(b.dataset.goChild));currentPage="children";render();});
   document.querySelectorAll("[data-delete-child-item]").forEach(b=>b.onclick=()=>{
@@ -1130,6 +1163,23 @@ function bindPageEvents(){
   document.querySelectorAll("[data-home-child-carry]").forEach(cbox=>cbox.onchange=()=>{
     const [childId,itemId]=cbox.dataset.homeChildCarry.split("|");
     setDone("childcarry",`${childId}-${itemId}`,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-home-child-plan]").forEach(cbox=>cbox.onchange=()=>{
+    const [childId,itemId]=cbox.dataset.homeChildPlan.split("|");
+    setDone("childplan",`${childId}-${itemId}`,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-home-child-routine]").forEach(cbox=>cbox.onchange=()=>{
+    const [childId,itemId]=cbox.dataset.homeChildRoutine.split("|");
+    setDone("childroutine",`${childId}-${itemId}`,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-home-child-meal]").forEach(cbox=>cbox.onchange=()=>{
+    setDone("childmeal",cbox.dataset.homeChildMeal,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-home-child-food]").forEach(cbox=>cbox.onchange=()=>{
+    setDone("childfood",cbox.dataset.homeChildFood,cbox.checked); render();
+  });
+  document.querySelectorAll("[data-home-child-food-add]").forEach(b=>b.onclick=()=>{
+    selectChild(Number(b.dataset.homeChildFoodAdd)); openModal("childFood");
   });
 
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));

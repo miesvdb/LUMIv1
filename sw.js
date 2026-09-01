@@ -1,4 +1,4 @@
-const CACHE="lumi-children-complete-1";
+const CACHE="lumi-children-home-actions-2";
 const ASSETS=["./","./index.html","./styles.css","./app.js","./manifest.json","./icon-192.png","./icon-512.png"];
 
 self.addEventListener("install",event=>{

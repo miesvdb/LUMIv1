@@ -64,10 +64,10 @@ h2{font-size:24px;margin:0}
 .check{appearance:none;width:24px;height:24px;border:2px solid #cfc8be;border-radius:50%;position:relative;flex:0 0 auto}
 .check:checked{border-color:var(--yellow);background:var(--yellow)}
 .check:checked::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:15px;font-weight:900}
-.bottom-nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(680px,100%);display:grid;grid-template-columns:repeat(var(--nav-count,6),1fr);gap:4px;background:rgba(255,253,249,.94);border-top:1px solid var(--line);padding:10px 10px calc(10px + env(safe-area-inset-bottom));backdrop-filter:blur(16px);z-index:20}
-.nav-item{border:0;background:transparent;border-radius:16px;padding:7px 2px;color:#696d74;display:grid;gap:2px;place-items:center}
-.nav-item span{font-size:20px}
-.nav-item small{font-size:10px}
+.bottom-nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(680px,100%);display:grid;grid-template-columns:repeat(var(--nav-count,6),minmax(0,1fr));gap:2px;background:rgba(255,253,249,.94);border-top:1px solid var(--line);padding:8px 4px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(16px);z-index:20;overflow:hidden}
+.nav-item{border:0;background:transparent;border-radius:13px;padding:6px 1px;color:#696d74;display:grid;gap:1px;place-items:center;min-width:0;width:100%;overflow:hidden}
+.nav-item span{font-size:clamp(15px,4vw,18px);line-height:1}
+.nav-item small{font-size:clamp(7px,2.15vw,9px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:clip;max-width:100%}
 .nav-item.active{color:#fff}
 .nav-item[data-page=home].active{background:var(--blue)}
 .nav-item[data-page=budget].active{background:var(--blue)}
@@ -813,3 +813,13 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
   .bottom-nav{padding-left:3px;padding-right:3px}
   .child-today-grid{grid-template-columns:1fr}
 }
+
+.child-today-action{
+  border:0;width:100%;padding:10px;border-radius:12px;background:var(--sage-soft);color:inherit;
+  text-align:left;display:grid;gap:4px;min-height:92px
+}
+.child-today-action small{color:var(--sage-deep);font-weight:700}
+.child-today-action strong{font-size:12px}
+.child-today-action span{font-size:10px;color:var(--muted);margin-top:2px}
+.child-today-action:active{transform:scale(.99)}
+.home-child-quick-add{width:100%;border:1px dashed var(--sage);background:var(--sage-soft);text-align:left}
