@@ -1,17 +1,12 @@
-# Lumi — kleurgecodeerde versie
-
-Gebouwd op de werkende, opnieuw opgebouwde v3-versie.
+# Lumi — budget met spaardoel
 
 Nieuw:
-- Iedere hoofdpagina heeft sterker zijn eigen kleuridentiteit.
-- Budget: donkerbruin.
-- Maaltijden en boodschappen: crème/geel.
-- Agenda: bordeauxrood.
-- Schoonmaak: lichtblauw.
-- Vandaag blijft rustig en combineert de onderwerp-kleuren.
-- Budget- en boodschappenwidgets op Vandaag hebben nu direct de kleur van hun pagina.
-- Agenda-, maaltijd- en schoonmaaktaken op Vandaag zijn eveneens kleurgecodeerd.
-- Afgevinkte taken worden zachter weergegeven binnen hun eigen kleurthema.
+- Bovenaan staan **Nog uit te geven** en **Uitgaven**.
+- Verzamel inkomen = profielinkomen + alle extra inkomsten van deze maand.
+- Uitgaven = vaste lasten + alle geregistreerde uitgaven van deze maand.
+- Nog uit te geven = verzamel inkomen - uitgaven - spaardoel.
+- Spaardoel kan direct in Budget worden ingesteld en blijft gekoppeld aan Profiel.
+- De groene voortgangsbalken zijn vervangen door lichtblauw uit het Lumi-palet.
+- Alle eerdere functionaliteit en kleurcodering zijn behouden.
 
-Alle bestaande functionaliteit is behouden.
-Cache-key: lumi-v3-color-coded-2
+Cache-key: lumi-budget-goal-3

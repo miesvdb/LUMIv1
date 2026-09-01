@@ -1,5 +1,5 @@
 
-const COLORS = {home:"#A5BCD6",budget:"#4A2E27",meals:"#F5EFC6",shopping:"#F5EFC6",agenda:"#4D0E12",cleaning:"#A5BCD6"};
+const COLORS = {home:"#A5BCD6",budget:"#4A2E27",meals:"#F5EFC6",shopping:"#F5EFC6",agenda:"#4D0E12",cleaning:"#A5BCD6",profile:"#231815"};
 
 const defaults = {
   income: 2600,
@@ -38,12 +38,15 @@ const defaults = {
 let state = JSON.parse(localStorage.getItem("mijnLevenState") || "null") || defaults;
 let currentPage = "home";
 let profile = JSON.parse(localStorage.getItem("mijnLevenProfile") || "null") || {
-  completed:false,name:"",income:2600,fixed:1510,savingsGoal:200,
+  completed:false,name:"",birthdate:"",income:2600,fixed:1510,savingsGoal:200,
   workDays:["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag"],
   diet:"Geen voorkeur",people:1,
   rooms:["Keuken","Woonkamer","Badkamer","Slaapkamer"],
   cleaningLevel:"Normaal"
 };
+if(profile.birthdate===undefined) profile.birthdate="";
+if(!Array.isArray(profile.workDays)) profile.workDays=["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag"];
+if(!Array.isArray(profile.rooms)) profile.rooms=["Keuken","Woonkamer","Badkamer","Slaapkamer"];
 let onboardIndex = 0;
 let agendaView = localStorage.getItem("lumiAgendaView") || "week";
 let agendaCursor = new Date();
@@ -148,9 +151,9 @@ function render(){
   document.documentElement.style.setProperty("--active", COLORS[currentPage]);
   todayLabel.textContent = dateNL();
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage || (currentPage==="shopping" && b.dataset.page==="meals")));
-  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema"};
+  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema",profile:"Profiel"};
   pageTitle.textContent = titleMap[currentPage];
-  content.innerHTML = ({home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage})[currentPage]();
+  content.innerHTML = ({home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage,profile:profilePage})[currentPage]();
   bindPageEvents();
 }
 
@@ -192,36 +195,153 @@ function homePage(){
     </div>
     <div class="section-title"><h3>Snel toevoegen</h3></div>
     <div class="fab-row">
-      <button class="action-btn" data-settings="1">Persoonlijke instellingen</button>
+      <button class="action-btn" data-go="profile">Profiel aanpassen</button>
       <button class="action-btn" data-add="expense">Uitgave</button>
       <button class="action-btn" data-add="agenda">Afspraak</button>
       <button class="action-btn" data-add="shopping">Boodschap</button>
       <button class="action-btn" data-add="cleaning">Schoonmaak</button>
     </div>`;
 }
+
+function profilePage(){
+  const diets=["Geen voorkeur","Vegetarisch","Vegan","Halal","Glutenvrij","Lactosevrij"];
+  const weekdays=["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"];
+  const rooms=["Keuken","Woonkamer","Badkamer","Slaapkamer","Toilet","Hal","Werkkamer","Balkon/tuin"];
+  return `
+    <section class="hero profile-hero">
+      <h2>Jouw <span class="brand-script">profiel</span></h2>
+      <p>Pas hier je persoonlijke gegevens aan. Je wijzigingen worden direct gebruikt in Lumi.</p>
+      <div class="decor-letter">P</div>
+    </section>
+
+    <form id="profileForm" class="profile-form">
+      <div class="section-title"><h3>Over jou</h3></div>
+      <div class="card profile-card">
+        <div class="form-grid">
+          <label>Naam
+            <input id="profileName" value="${profile.name || ""}" placeholder="Voornaam">
+          </label>
+          <label>Geboortedatum
+            <input id="profileBirthdate" type="date" value="${profile.birthdate || ""}">
+          </label>
+          <label>Aantal personen in je huishouden
+            <input id="profilePeople" type="number" min="1" max="12" value="${profile.people || 1}">
+          </label>
+          <label>Eetvoorkeur
+            <select id="profileDiet">${diets.map(x=>`<option ${profile.diet===x?"selected":""}>${x}</option>`).join("")}</select>
+          </label>
+        </div>
+      </div>
+
+      <div class="section-title"><h3>Geld</h3></div>
+      <div class="card profile-card profile-money">
+        <div class="form-grid">
+          <label>Netto inkomen per maand (€)
+            <input id="profileIncome" type="number" min="0" step="1" value="${profile.income ?? 0}">
+          </label>
+          <label>Vaste lasten per maand (€)
+            <input id="profileFixed" type="number" min="0" step="1" value="${profile.fixed ?? 0}">
+          </label>
+          <label>Gewenst sparen per maand (€)
+            <input id="profileSavings" type="number" min="0" step="1" value="${profile.savingsGoal ?? 0}">
+          </label>
+        </div>
+      </div>
+
+      <div class="section-title"><h3>Weekritme</h3></div>
+      <div class="card profile-card profile-week">
+        <p class="subtle">Selecteer je gebruikelijke werk- of studiedagen.</p>
+        <div class="choice-grid">
+          ${weekdays.map(d=>`<label class="choice"><input type="checkbox" name="profileWorkday" value="${d}" ${(profile.workDays||[]).includes(d)?"checked":""}>${d}</label>`).join("")}
+        </div>
+      </div>
+
+      <div class="section-title"><h3>Huis & schoonmaak</h3></div>
+      <div class="card profile-card profile-home">
+        <p class="subtle">Welke ruimtes wil je meenemen in je huishouden?</p>
+        <div class="choice-grid">
+          ${rooms.map(r=>`<label class="choice"><input type="checkbox" name="profileRoom" value="${r}" ${(profile.rooms||[]).includes(r)?"checked":""}>${r}</label>`).join("")}
+        </div>
+        <div class="form-grid">
+          <label>Schoonmaakniveau
+            <select id="profileCleaning">
+              ${["Licht","Normaal","Uitgebreid"].map(x=>`<option ${profile.cleaningLevel===x?"selected":""}>${x}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="profile-savebar">
+        <button class="primary profile-save" type="submit">Profiel opslaan</button>
+        <span id="profileSaved" class="profile-saved" aria-live="polite"></span>
+      </div>
+    </form>`;
+}
+
+
+function budgetTotals(){
+  const monthKey=todayISO().slice(0,7);
+  const monthTx=(state.transactions||[]).filter(t=>(t.date||"").startsWith(monthKey));
+  const extraIncome=monthTx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
+  const transactionExpenses=monthTx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+  const totalIncome=Number(profile.income||0)+extraIncome;
+  const fixedExpenses=Number(profile.fixed||0);
+  const totalExpenses=fixedExpenses+transactionExpenses;
+  const savingsGoal=Math.max(0,Number(profile.savingsGoal||0));
+  const remaining=totalIncome-totalExpenses-savingsGoal;
+  return {extraIncome,transactionExpenses,totalIncome,fixedExpenses,totalExpenses,savingsGoal,remaining};
+}
+
 function budgetPage(){
-  const total = state.budgets.reduce((s,x)=>s+x.limit,0);
-  const spent = state.budgets.reduce((s,x)=>s+x.spent,0);
-  const free = state.income - state.fixed - spent;
+  const {totalIncome,totalExpenses,savingsGoal,remaining}=budgetTotals();
   return `
     <section class="hero theme-green">
       <h2>Budget <span class="brand-script">overzicht</span></h2>
-      <p>Na vaste lasten en geregistreerde uitgaven heb je ${euro(free)} over.</p>
+      <p>Alles van deze maand in één oogopslag.</p>
       <div class="decor-letter">B</div>
     </section>
-    <div class="grid2">
-      <div class="stat"><small>Inkomen</small><strong>${euro(state.income)}</strong></div>
-      <div class="stat"><small>Vaste lasten</small><strong>${euro(state.fixed)}</strong></div>
+
+    <div class="grid2 budget-main-stats">
+      <div class="stat budget-remaining">
+        <small>Nog uit te geven</small>
+        <strong>${euro(remaining)}</strong>
+      </div>
+      <div class="stat budget-expenses">
+        <small>Uitgaven</small>
+        <strong>${euro(totalExpenses)}</strong>
+      </div>
     </div>
+
+    <div class="budget-mini-summary">
+      <div><small>Verzamel inkomen</small><strong>${euro(totalIncome)}</strong></div>
+      <div><small>Spaardoel</small><strong>${euro(savingsGoal)}</strong></div>
+    </div>
+
+    <div class="card savings-goal-card">
+      <div class="section-title"><h3>Spaardoel</h3><span class="pill">${euro(savingsGoal)} per maand</span></div>
+      <div class="savings-progress"><span style="width:${Math.max(0,Math.min(100,totalIncome ? (savingsGoal/totalIncome)*100 : 0))}%"></span></div>
+      <form id="savingsGoalForm" class="inline-budget-form">
+        <label>Maandelijks spaardoel
+          <input id="budgetSavingsGoal" type="number" min="0" step="1" value="${savingsGoal}">
+        </label>
+        <button class="secondary" type="submit">Opslaan</button>
+      </form>
+    </div>
+
     ${budgetChart()}
-    <div class="fab-row"><button class="action-btn" data-add="income">Inkomst toevoegen</button><button class="action-btn" data-add="expense">Uitgave toevoegen</button></div>
-    <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">＋ categorie</button></div>
+
+    <div class="fab-row">
+      <button class="action-btn" data-add="income">Inkomst toevoegen</button>
+      <button class="action-btn" data-add="expense">Uitgave toevoegen</button>
+    </div>
+
+    <div class="section-title"><h3>Categorieën</h3><button class="link-btn" data-add="budgetcat">Categorie toevoegen</button></div>
     <div class="list">
       ${state.budgets.map((b,i)=>{
-        const pct=Math.min(100,Math.round((b.spent/b.limit)*100));
+        const pct=b.limit>0 ? Math.min(100,Math.round((b.spent/b.limit)*100)) : 0;
         return `<div class="card">
           <div class="row-main"><strong>${b.name}</strong><small>${euro(b.spent)} van ${euro(b.limit)}</small></div>
-          <div class="progress"><span style="width:${pct}%;background:var(--green)"></span></div>
+          <div class="progress"><span style="width:${pct}%"></span></div>
           <div class="fab-row" style="margin-top:10px"><button class="action-btn" data-expense-cat="${i}">Uitgave toevoegen</button></div>
         </div>`;
       }).join("")}
@@ -231,13 +351,22 @@ function budgetPage(){
 function budgetChart(){
   const now=new Date(), months=[];
   for(let i=5;i>=0;i--){ months.push(new Date(now.getFullYear(),now.getMonth()-i,1)); }
+  const currentKey=todayISO().slice(0,7);
   const data=months.map(d=>{
     const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    const tx=state.transactions.filter(t=>t.date.startsWith(key));
-    return {label:d.toLocaleDateString("nl-NL",{month:"short"}),income:tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),expense:tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)};
+    const tx=state.transactions.filter(t=>(t.date||"").startsWith(key));
+    const extraIncome=tx.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
+    const variableExpense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
+    const baseIncome=key===currentKey ? Number(profile.income||0) : 0;
+    const fixed=key===currentKey ? Number(profile.fixed||0) : 0;
+    return {
+      label:d.toLocaleDateString("nl-NL",{month:"short"}),
+      income:baseIncome+extraIncome,
+      expense:fixed+variableExpense
+    };
   });
   const max=Math.max(1,...data.flatMap(x=>[x.income,x.expense]));
-  const W=560,H=190,base=160,bar=16,gap=56;
+  const W=560,H=190,base=160,bar=16;
   const bars=data.map((x,i)=>{
     const x0=34+i*86, ih=(x.income/max)*125, eh=(x.expense/max)*125;
     return `<rect class="chart-income" x="${x0}" y="${base-ih}" width="${bar}" height="${ih}" rx="5"/><rect class="chart-expense" x="${x0+21}" y="${base-eh}" width="${bar}" height="${eh}" rx="5"/><text class="chart-label" x="${x0+18}" y="181" text-anchor="middle">${x.label}</text>`;
@@ -396,6 +525,43 @@ function cleaningPage(){
 function row(color,icon,title,sub){return `<div class="row"><span style="width:5px;height:38px;border-radius:99px;background:${color}"></span><div class="row-main"><strong>${title}</strong><small>${sub}</small></div></div>`}
 
 function bindPageEvents(){
+  const savingsGoalForm=document.getElementById("savingsGoalForm");
+  if(savingsGoalForm){
+    savingsGoalForm.onsubmit=(e)=>{
+      e.preventDefault();
+      profile.savingsGoal=Math.max(0,Number(document.getElementById("budgetSavingsGoal").value||0));
+      saveProfile();
+      render();
+    };
+  }
+
+  const profileForm=document.getElementById("profileForm");
+  if(profileForm){
+    profileForm.onsubmit=(e)=>{
+      e.preventDefault();
+      profile.name=document.getElementById("profileName").value.trim();
+      profile.birthdate=document.getElementById("profileBirthdate").value;
+      profile.people=Math.max(1,Number(document.getElementById("profilePeople").value||1));
+      profile.diet=document.getElementById("profileDiet").value;
+      profile.income=Math.max(0,Number(document.getElementById("profileIncome").value||0));
+      profile.fixed=Math.max(0,Number(document.getElementById("profileFixed").value||0));
+      profile.savingsGoal=Math.max(0,Number(document.getElementById("profileSavings").value||0));
+      profile.workDays=[...document.querySelectorAll('input[name="profileWorkday"]:checked')].map(x=>x.value);
+      profile.rooms=[...document.querySelectorAll('input[name="profileRoom"]:checked')].map(x=>x.value);
+      profile.cleaningLevel=document.getElementById("profileCleaning").value;
+      profile.completed=true;
+      state.income=profile.income;
+      state.fixed=profile.fixed;
+      saveProfile();
+      save();
+      const saved=document.getElementById("profileSaved");
+      if(saved){
+        saved.textContent="Opgeslagen";
+        setTimeout(()=>{ if(saved) saved.textContent=""; },1800);
+      }
+    };
+  }
+
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));
   document.querySelectorAll("[data-agenda-view]").forEach(b=>b.onclick=()=>{
     agendaView=b.dataset.agendaView;
@@ -518,8 +684,8 @@ function openModal(type, catIndex=null){
 document.getElementById("modalForm").addEventListener("submit",e=>{
   e.preventDefault();
   const t=modal.dataset.type;
-  if(t==="expense"){ const i=Number(document.getElementById("fCat").value); const a=Number(document.getElementById("fAmount").value||0); state.budgets[i].spent += a; state.transactions.push({id:Date.now(),type:"expense",amount:a,date:todayISO(),label:state.budgets[i].name}); }
-  if(t==="income"){ const a=Number(document.getElementById("fIncomeAmount").value||0); const d=document.getElementById("fIncomeDate").value; const l=document.getElementById("fIncomeLabel").value||"Inkomst"; state.transactions.push({id:Date.now(),type:"income",amount:a,date:d,label:l}); }
+  if(t==="expense"){ const i=Number(document.getElementById("fCat").value); const a=Math.max(0,Number(document.getElementById("fAmount").value||0)); state.budgets[i].spent += a; state.transactions.push({id:Date.now(),type:"expense",amount:a,date:todayISO(),label:state.budgets[i].name}); }
+  if(t==="income"){ const a=Math.max(0,Number(document.getElementById("fIncomeAmount").value||0)); const d=document.getElementById("fIncomeDate").value; const l=document.getElementById("fIncomeLabel").value||"Inkomst"; state.transactions.push({id:Date.now(),type:"income",amount:a,date:d,label:l}); }
   if(t==="agenda"){
     const allDay=document.getElementById("fAllDay").checked;
     const start=document.getElementById("fStartTime").value;
@@ -563,11 +729,11 @@ const onboardNext = document.getElementById("onboardNext");
 
 const onboardSteps = [
 ()=>`<div class="onboard-hero"><h2>Welkom bij <span class="brand-script">Lumi</span></h2><p>We richten de app één keer samen in. Daarna gebruikt je dashboard jouw eigen budget, ritme, maaltijden en huishouden.</p></div>`,
-()=>`<h2>Over jou</h2><div class="form-grid"><label>Hoe mogen we je noemen?<input id="obName" value="${profile.name}" placeholder="Voornaam"></label><label>Voor hoeveel personen plan je?<input id="obPeople" type="number" min="1" max="12" value="${profile.people}"></label><label>Eetvoorkeur<select id="obDiet">${["Geen voorkeur","Vegetarisch","Vegan","Halal","Glutenvrij","Lactosevrij"].map(x=>`<option ${profile.diet===x?"selected":""}>${x}</option>`).join("")}</select></label></div>`,
+()=>`<h2>Over jou</h2><div class="form-grid"><label>Hoe mogen we je noemen?<input id="obName" value="${profile.name}" placeholder="Voornaam"></label><label>Geboortedatum<input id="obBirthdate" type="date" value="${profile.birthdate||""}"></label><label>Voor hoeveel personen plan je?<input id="obPeople" type="number" min="1" max="12" value="${profile.people}"></label><label>Eetvoorkeur<select id="obDiet">${["Geen voorkeur","Vegetarisch","Vegan","Halal","Glutenvrij","Lactosevrij"].map(x=>`<option ${profile.diet===x?"selected":""}>${x}</option>`).join("")}</select></label></div>`,
 ()=>`<h2>Je geld</h2><p class="eyebrow">Hiermee maken we je budgetoverzicht persoonlijk.</p><div class="form-grid"><label>Netto inkomen per maand (€)<input id="obIncome" type="number" value="${profile.income}"></label><label>Vaste lasten per maand (€)<input id="obFixed" type="number" value="${profile.fixed}"></label><label>Gewenst sparen per maand (€)<input id="obSavings" type="number" value="${profile.savingsGoal}"></label></div>`,
 ()=>`<h2>Je weekritme</h2><p class="eyebrow">Selecteer je gebruikelijke werk-/studiedagen.</p><div class="choice-grid">${Object.keys(state.meals).map(d=>`<label class="choice"><input type="checkbox" name="workday" value="${d}" ${profile.workDays.includes(d)?"checked":""}>${d}</label>`).join("")}</div>`,
 ()=>`<h2>Je huis</h2><p class="eyebrow">Welke ruimtes wil je in het schoonmaakschema?</p><div class="choice-grid">${["Keuken","Woonkamer","Badkamer","Slaapkamer","Toilet","Hal","Werkkamer","Balkon/tuin"].map(r=>`<label class="choice"><input type="checkbox" name="room" value="${r}" ${profile.rooms.includes(r)?"checked":""}>${r}</label>`).join("")}</div><div class="form-grid"><label>Hoe uitgebreid wil je schoonmaken?<select id="obClean"><option ${profile.cleaningLevel==="Licht"?"selected":""}>Licht</option><option ${profile.cleaningLevel==="Normaal"?"selected":""}>Normaal</option><option ${profile.cleaningLevel==="Uitgebreid"?"selected":""}>Uitgebreid</option></select></label></div>`,
-()=>`<div class="onboard-hero"><h2>Je app is klaar</h2><p>Je kunt alles later aanpassen via <strong>Persoonlijke instellingen</strong> op het Vandaag-scherm.</p><div class="card settings-card"><span>Budget op basis van jouw inkomen</span><span>Maaltijden voor ${profile.people} persoon/personen</span><span>Jouw weekritme</span><span>Schoonmaak voor jouw ruimtes</span></div></div>`
+()=>`<div class="onboard-hero"><h2>Je app is klaar</h2><p>Je kunt alles later aanpassen via de <strong>Profiel</strong>-tab.</p><div class="card settings-card"><span>Budget op basis van jouw inkomen</span><span>Maaltijden voor ${profile.people} persoon/personen</span><span>Jouw weekritme</span><span>Schoonmaak voor jouw ruimtes</span></div></div>`
 ];
 
 function startOnboarding(edit=false){
@@ -584,6 +750,7 @@ function showOnboard(){
 function collectOnboard(){
   if(onboardIndex===1){
     profile.name=document.getElementById("obName").value.trim();
+    profile.birthdate=document.getElementById("obBirthdate").value;
     profile.people=Number(document.getElementById("obPeople").value||1);
     profile.diet=document.getElementById("obDiet").value;
   }

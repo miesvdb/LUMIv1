@@ -6,7 +6,7 @@
   --card:#fffdf9;
   --line:#e7e1d8;
   --blue:#3154c7;
-  --green:#55a83d;
+  --green:#A5BCD6;
   --orange:#e77b12;
   --purple:#7d48d6;
   --yellow:#efb400;
@@ -30,7 +30,7 @@ h2{font-size:24px;margin:0}
 .hero p{margin:6px 0 0;opacity:.92}
 .hero .scribble{position:absolute;right:18px;bottom:8px;font-size:56px;opacity:.9;transform:rotate(-9deg)}
 .theme-blue{background:var(--blue)}
-.theme-green{background:var(--green)}
+.theme-green{background:var(--blue)}
 .theme-orange{background:var(--orange)}
 .theme-purple{background:var(--purple)}
 .theme-yellow{background:var(--yellow)}
@@ -70,7 +70,7 @@ h2{font-size:24px;margin:0}
 .nav-item small{font-size:10px}
 .nav-item.active{color:#fff}
 .nav-item[data-page=home].active{background:var(--blue)}
-.nav-item[data-page=budget].active{background:var(--green)}
+.nav-item[data-page=budget].active{background:var(--blue)}
 .nav-item[data-page=meals].active{background:var(--orange)}
 .nav-item[data-page=agenda].active{background:var(--purple)}
 .nav-item[data-page=cleaning].active{background:var(--yellow)}
@@ -123,7 +123,7 @@ textarea{min-height:84px;resize:vertical}
 .chart-wrap svg{width:100%;height:100%;overflow:visible}
 .chart-grid{stroke:#e6e0d8;stroke-width:1}
 .chart-label{font-size:11px;fill:#7a7d83}
-.chart-income{fill:#55a83d}
+.chart-income{fill:#A5BCD6}
 .chart-expense{fill:#d6a23a}
 .chart-legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:12px}
 .legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
@@ -333,3 +333,110 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
 .page-agenda .task-row.done{background:#f4eaea}
 .page-meals .task-row.done{background:#f5f0d9}
 .page-cleaning .task-row.done{background:#e9f0f5}
+
+/* Lumi — Profiel */
+.bottom-nav{grid-template-columns:repeat(6,1fr)}
+.nav-item[data-page=profile].active{background:var(--java);color:#FFF9EF}
+.profile-hero{
+  background:linear-gradient(135deg,#493a34,var(--java));
+  color:#FFF9EF;
+}
+.profile-form{display:grid;gap:14px}
+.profile-card{border-top:4px solid var(--java)}
+.profile-money{border-top-color:var(--brown);background:#fbf7f2}
+.profile-week{border-top-color:var(--red);background:#fffafa}
+.profile-home{border-top-color:var(--blue);background:#f8fbfd}
+.page-profile .section-title h3{color:var(--java)}
+.page-profile .choice input:checked + *{color:var(--java)}
+.profile-savebar{
+  position:sticky;
+  bottom:82px;
+  z-index:8;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:rgba(251,248,239,.94);
+  backdrop-filter:blur(14px);
+}
+.profile-save{
+  background:var(--java)!important;
+  color:#FFF9EF!important;
+}
+.profile-saved{
+  color:#496985;
+  font-size:13px;
+  font-weight:700;
+}
+@media (max-width:420px){
+  .bottom-nav{gap:2px;padding-left:6px;padding-right:6px}
+  .nav-item{padding-left:0;padding-right:0}
+  .nav-item span{font-size:17px}
+  .nav-item small{font-size:9px}
+}
+
+/* Lumi — budgetoverzicht */
+.budget-main-stats .stat{min-height:112px}
+.budget-remaining{
+  background:linear-gradient(145deg,#f0e7dd,#e6d7ca)!important;
+  border-color:#cdb9a7!important;
+}
+.budget-remaining strong{color:var(--brown)!important}
+.budget-expenses{
+  background:linear-gradient(145deg,#663739,var(--red))!important;
+  border-color:var(--red)!important;
+  color:#fff9ef!important;
+}
+.budget-expenses small{color:#f4dddd!important}
+
+.budget-mini-summary{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  margin:0 0 14px;
+}
+.budget-mini-summary>div{
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#f5eee6;
+}
+.budget-mini-summary small{
+  display:block;
+  color:var(--muted);
+  margin-bottom:3px;
+}
+.budget-mini-summary strong{
+  display:block;
+  color:var(--brown);
+  font-size:16px;
+}
+.savings-goal-card{
+  border-top:4px solid var(--blue)!important;
+  background:#f8fbfd!important;
+}
+.savings-progress,.progress{
+  height:10px;
+  background:#e8dfd6!important;
+  border-radius:999px;
+  overflow:hidden;
+}
+.savings-progress>span,.page-budget .progress>span{
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:var(--blue)!important;
+}
+.inline-budget-form{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:end;
+  margin-top:14px;
+}
+.inline-budget-form label{min-width:0}
+@media(max-width:430px){
+  .inline-budget-form{grid-template-columns:1fr}
+}
