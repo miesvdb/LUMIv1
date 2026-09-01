@@ -32,3 +32,16 @@ De back-upfunctie bewaart zowel je profiel als je Lumi-data. Bewaar het JSON-bes
 - Notities.
 - Weekoverzicht.
 - Direct boodschappen toevoegen vanuit Kinderen.
+
+
+## Verbetering Kinderen
+- Onderste navigatie schaalt nu strikt over alle zichtbare tabbladen en blijft op één regel.
+- Eten is herbouwd als dagoverzicht met 5 vaste eetmomenten.
+- Eetmomenten zijn direct bewerkbaar en worden niet dubbel opgeslagen.
+- Hoeveelheid: Alles, Meeste, Helft, Beetje, Niet.
+- Drinken en notitie per eetmoment.
+- Gezinsavondeten kan direct worden overgenomen.
+- Favorieten voor vaak gegeten producten.
+- Dag terug/vooruit en geschiedenis van de afgelopen 7 dagen.
+- Homepage toont compact 'eten x/5 ingevuld' in plaats van eten als afvinktaak.
+- Klik op Eten bij 'Vandaag voor [kind]' opent direct het eetoverzicht.

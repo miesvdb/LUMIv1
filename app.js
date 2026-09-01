@@ -173,6 +173,7 @@ function normalizeChild(child,index=0){
     birthdate:child?.birthdate||"",
     plans:Array.isArray(child?.plans)?child.plans:[],
     foodLogs:Array.isArray(child?.foodLogs)?child.foodLogs:[],
+    foodFavorites:Array.isArray(child?.foodFavorites)?child.foodFavorites:[],
     carryItems:Array.isArray(child?.carryItems)?child.carryItems:[],
     routines:Array.isArray(child?.routines)?child.routines:[],
     notes:Array.isArray(child?.notes)?child.notes:[],
@@ -222,6 +223,42 @@ function childRoutinesOn(child,iso){
 function childFoodOn(child,iso){
   return (child?.foodLogs||[]).filter(f=>f.date===iso);
 }
+
+function childFoodMoment(child,iso,moment){
+  return (child?.foodLogs||[]).find(f=>f.date===iso && f.moment===moment)||null;
+}
+function childFoodMoments(){
+  return ["Ontbijt","Tussendoor","Lunch","Tussendoor 2","Avondeten"];
+}
+function childFoodProgress(child,iso=todayISO()){
+  const total=childFoodMoments().length;
+  const filled=childFoodMoments().filter(m=>!!childFoodMoment(child,iso,m)).length;
+  return {filled,total};
+}
+function childFoodHistory(child,days=7){
+  const rows=[];
+  for(let i=0;i<days;i++){
+    const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-i);
+    const iso=isoLocal(d);
+    rows.push({iso,date:d,logs:childFoodOn(child,iso)});
+  }
+  return rows;
+}
+function saveChildFavorite(child,text){
+  const value=(text||"").trim();
+  if(!value) return;
+  child.foodFavorites=Array.isArray(child.foodFavorites)?child.foodFavorites:[];
+  if(!child.foodFavorites.some(x=>x.toLowerCase()===value.toLowerCase())){
+    child.foodFavorites.unshift(value);
+    child.foodFavorites=child.foodFavorites.slice(0,12);
+  }
+}
+function familyDinnerForDate(iso){
+  const d=dateObj(iso);
+  const day=DAY_NAMES[d.getDay()];
+  return state.meals?.[day]?.Diner||"";
+}
+
 function childMealForDay(child,dayName){
   return child?.mealPlan?.[dayName]||"";
 }
@@ -274,7 +311,9 @@ function ensureChildrenNav(){
     btn.remove();
     if(currentPage==="children") currentPage="home";
   }
-  nav.style.setProperty("--nav-count",String(nav.querySelectorAll(".nav-item").length));
+  const count=nav.querySelectorAll(".nav-item").length;
+  nav.style.setProperty("--nav-count",String(count));
+  nav.dataset.count=String(count);
 }
 
 function migrateState(){
@@ -436,11 +475,9 @@ function homePage(){
           <input class="task-check" type="checkbox" data-home-child-meal="${child.id}" ${isDone("childmeal",child.id,today)?"checked":""}>
           <div class="row-main"><strong>${child.name}: avondeten ${meal}</strong><small>Eten</small></div><span class="pill">Kind</span>
         </label>`:"";
-        const foodRow=food.length?`<label class="row task-row home-task-child ${isDone("childfood",child.id,today)?"done":""}">
-          <input class="task-check" type="checkbox" data-home-child-food="${child.id}" ${isDone("childfood",child.id,today)?"checked":""}>
-          <div class="row-main"><strong>${child.name}: eten bijgehouden</strong><small>${food.length} eetmoment(en) ingevuld</small></div><span class="pill">Kind</span>
-        </label>`:`<button class="row home-task-child home-child-quick-add" type="button" data-home-child-food-add="${child.id}">
-          <div class="row-main"><strong>${child.name}: eten nog niet bijgehouden</strong><small>Tik om een eetmoment toe te voegen</small></div><span class="pill">Kind</span>
+        const foodProgress=childFoodProgress(child,today);
+        const foodRow=`<button class="row home-task-child home-child-quick-add" type="button" data-home-child-food-open="${child.id}">
+          <div class="row-main"><strong>${child.name}: eten ${foodProgress.filled}/${foodProgress.total} ingevuld</strong><small>Tik om het eetoverzicht te openen</small></div><span class="pill">Kind</span>
         </button>`;
         return planRows+carryRows+routineRows+mealRow+foodRow;
       }).join("")}
@@ -472,10 +509,14 @@ function childrenPage(){
   const plans=childPlansOn(child,today);
   const carry=childCarryOn(child,today);
   const routines=childRoutinesOn(child,today);
-  const food=childFoodOn(child,today);
+  const foodViewDate=localStorage.getItem("lumiChildFoodDate")||today;
+  const food=childFoodOn(child,foodViewDate);
+  const todayFood=childFoodOn(child,today);
   const meal=childMealForDay(child,dayName);
   const next7=[...Array(7)].map((_,i)=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+i);return d;});
-  const foodMoments=["Ontbijt","Tussendoor","Lunch","Tussendoor 2","Avondeten"];
+  const foodMoments=childFoodMoments();
+  const foodProgress=childFoodProgress(child,foodViewDate);
+  const foodHistory=childFoodHistory(child,7);
   return `
     <section class="hero children-hero">
       <h2>Voor <span class="brand-script">${child.name}</span></h2>
@@ -491,8 +532,8 @@ function childrenPage(){
         <button type="button" class="child-today-action" data-child-today-action="childPlan">
           <small>Planning</small><strong>${plans.length?plans.map(p=>`${p.allDay?"Hele dag":p.startTime||""} ${p.title}`).join(" · "):"Geen afspraak"}</strong><span>Toevoegen of aanpassen</span>
         </button>
-        <button type="button" class="child-today-action" data-child-today-action="childFood">
-          <small>Eten</small><strong>${food.length?`${food.length} moment(en) bijgehouden`:meal?`Gepland: ${meal}`:"Nog niets bijgehouden"}</strong><span>Eetmoment toevoegen</span>
+        <button type="button" class="child-today-action" data-child-today-food>
+          <small>Eten</small><strong>${todayFood.length?`${todayFood.length} moment(en) bijgehouden`:meal?`Gepland: ${meal}`:"Nog niets bijgehouden"}</strong><span>Open eetoverzicht</span>
         </button>
         <button type="button" class="child-today-action" data-child-today-action="childCarry">
           <small>Meenemen</small><strong>${carry.length?carry.map(x=>x.text).join(" · "):"Niets extra"}</strong><span>Item toevoegen</span>
@@ -525,18 +566,61 @@ function childrenPage(){
       </div>`).join(""):`<div class="empty">Nog geen planning voor ${child.name}.</div>`}
     </div>
 
-    <div class="section-title"><h3>Eten & drinken</h3><button class="link-btn" data-child-add="childFood">Eetmoment</button></div>
-    <div class="card child-meal-plan-card">
-      <div><small>Gepland avondeten vandaag</small><strong>${meal||"Nog niet gepland"}</strong></div>
-      <button class="link-btn" data-child-add="childMealPlan">Weekmenu kind</button>
+    <div class="section-title"><h3>Eten & drinken</h3><span>${foodProgress.filled}/${foodProgress.total} ingevuld</span></div>
+    <div class="card child-food-dashboard">
+      <div class="child-food-datebar">
+        <button type="button" class="secondary compact" data-child-food-date="-1">‹</button>
+        <div>
+          <small>Dagoverzicht</small>
+          <strong>${new Date(foodViewDate+"T12:00").toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</strong>
+        </div>
+        <button type="button" class="secondary compact" data-child-food-date="1">›</button>
+      </div>
+      ${foodViewDate!==today?`<button type="button" class="link-btn" data-child-food-today>Terug naar vandaag</button>`:""}
+      <div class="child-food-progress"><span style="width:${Math.round(foodProgress.filled/foodProgress.total*100)}%"></span></div>
+
+      <div class="child-food-moments">
+        ${foodMoments.map(moment=>{
+          const f=childFoodMoment(child,foodViewDate,moment);
+          const familyDinner=moment==="Avondeten"?familyDinnerForDate(foodViewDate):"";
+          return `<button type="button" class="child-food-moment ${f?"filled":""}" data-edit-child-food="${moment}">
+            <span class="child-food-moment-main">
+              <strong>${moment}</strong>
+              <small>${f
+                ? `${f.food||"Geen eten ingevuld"} · ${f.amount||"hoeveelheid niet ingevuld"}${f.drink?` · ${f.drink}`:""}`
+                : moment==="Avondeten" && familyDinner
+                  ? `Nog niet ingevuld · gezinsmaaltijd: ${familyDinner}`
+                  : "Nog niet ingevuld"}</small>
+              ${f?.note?`<em>${f.note}</em>`:""}
+            </span>
+            <span class="child-food-edit">${f?"Bewerk":"Vul in"}</span>
+          </button>`;
+        }).join("")}
+      </div>
+
+      ${(child.foodFavorites||[]).length?`
+        <div class="child-food-favorites">
+          <small>Favorieten</small>
+          <div class="ingredient-chips">
+            ${(child.foodFavorites||[]).map(x=>`<button type="button" data-child-food-favorite="${x}">${x}</button>`).join("")}
+          </div>
+        </div>`:""}
+
+      <div class="child-food-history">
+        <div class="category-detail-title"><strong>Afgelopen 7 dagen</strong><span>eetmomenten</span></div>
+        ${foodHistory.map(day=>{
+          const filled=childFoodProgress(child,day.iso).filled;
+          return `<button type="button" data-child-food-open-date="${day.iso}" class="child-food-history-row">
+            <span>${day.date.toLocaleDateString("nl-NL",{weekday:"short",day:"numeric",month:"short"})}</span>
+            <strong>${filled}/${foodProgress.total}</strong>
+          </button>`;
+        }).join("")}
+      </div>
     </div>
-    <div class="list">
-      ${foodMoments.map(moment=>{
-        const f=food.find(x=>x.moment===moment);
-        return `<div class="row ${f?"":"child-food-empty"}"><div class="row-main"><strong>${moment}</strong><small>${f?`${f.food||"—"} · ${f.amount||"niet aangegeven"}${f.drink?` · drinken: ${f.drink}`:""}`:"Nog niet ingevuld"}</small></div>${f?`<button class="link-btn" data-delete-child-item="foodLogs|${f.id}">wis</button>`:""}</div>`;
-      }).join("")}
+    <div class="fab-row child-food-actions">
+      <button class="action-btn" type="button" data-child-add="childMealPlan">Weekmenu kind</button>
+      <button class="action-btn" type="button" data-child-shopping>Voor ${child.name} aan boodschappen toevoegen</button>
     </div>
-    <button class="action-btn child-shopping-shortcut" data-child-shopping>Voor ${child.name} aan boodschappen toevoegen</button>
 
     <div class="section-title"><h3>Meenemen</h3><button class="link-btn" data-child-add="childCarry">Item toevoegen</button></div>
     <div class="list">
@@ -1143,6 +1227,32 @@ function bindPageEvents(){
   document.querySelectorAll("[data-select-child]").forEach(b=>b.onclick=()=>{selectChild(Number(b.dataset.selectChild));render();});
   document.querySelectorAll("[data-child-add]").forEach(b=>b.onclick=()=>openModal(b.dataset.childAdd));
   document.querySelectorAll("[data-child-today-action]").forEach(b=>b.onclick=()=>openModal(b.dataset.childTodayAction));
+
+  document.querySelectorAll("[data-child-today-food]").forEach(b=>b.onclick=()=>{
+    localStorage.setItem("lumiChildFoodDate",todayISO());
+    document.querySelector(".child-food-dashboard")?.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+  document.querySelectorAll("[data-edit-child-food]").forEach(b=>b.onclick=()=>{
+    const date=localStorage.getItem("lumiChildFoodDate")||todayISO();
+    openModal("childFood",`${date}|${b.dataset.editChildFood}`);
+  });
+  document.querySelectorAll("[data-child-food-date]").forEach(b=>b.onclick=()=>{
+    const current=localStorage.getItem("lumiChildFoodDate")||todayISO();
+    const d=dateObj(current); d.setDate(d.getDate()+Number(b.dataset.childFoodDate));
+    localStorage.setItem("lumiChildFoodDate",isoLocal(d)); render();
+  });
+  document.querySelectorAll("[data-child-food-today]").forEach(b=>b.onclick=()=>{
+    localStorage.setItem("lumiChildFoodDate",todayISO()); render();
+  });
+  document.querySelectorAll("[data-child-food-open-date]").forEach(b=>b.onclick=()=>{
+    localStorage.setItem("lumiChildFoodDate",b.dataset.childFoodOpenDate); render();
+  });
+  document.querySelectorAll("[data-child-food-favorite]").forEach(b=>b.onclick=()=>{
+    const date=localStorage.getItem("lumiChildFoodDate")||todayISO();
+    openModal("childFood",`${date}|Tussendoor`);
+    setTimeout(()=>{const el=document.getElementById("fChildFood");if(el)el.value=b.dataset.childFoodFavorite;},0);
+  });
+
   document.querySelectorAll("[data-child-shopping]").forEach(b=>b.onclick=()=>openModal("shopping"));
   document.querySelectorAll("[data-go-child]").forEach(b=>b.onclick=()=>{selectChild(Number(b.dataset.goChild));currentPage="children";render();});
   document.querySelectorAll("[data-delete-child-item]").forEach(b=>b.onclick=()=>{
@@ -1175,11 +1285,10 @@ function bindPageEvents(){
   document.querySelectorAll("[data-home-child-meal]").forEach(cbox=>cbox.onchange=()=>{
     setDone("childmeal",cbox.dataset.homeChildMeal,cbox.checked); render();
   });
-  document.querySelectorAll("[data-home-child-food]").forEach(cbox=>cbox.onchange=()=>{
-    setDone("childfood",cbox.dataset.homeChildFood,cbox.checked); render();
-  });
-  document.querySelectorAll("[data-home-child-food-add]").forEach(b=>b.onclick=()=>{
-    selectChild(Number(b.dataset.homeChildFoodAdd)); openModal("childFood");
+  document.querySelectorAll("[data-home-child-food-open]").forEach(b=>b.onclick=()=>{
+    selectChild(Number(b.dataset.homeChildFoodOpen));
+    localStorage.setItem("lumiChildFoodDate",todayISO());
+    currentPage="children"; render();
   });
 
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));
@@ -1252,7 +1361,27 @@ function openModal(type, catIndex=null){
       return `<div class="form-grid"><label>Naam<input id="fChildName" value="${c?.name||""}" placeholder="Voornaam"></label><label>Geboortedatum<input id="fChildBirthdate" type="date" value="${c?.birthdate||""}"></label></div>`;
     })()},
     childPlan:{title:"Planning kind toevoegen",html:`<div class="form-grid"><label>Wat staat er gepland?<input id="fChildPlanTitle" placeholder="Bijv. opvang, zwemles, opa en oma"></label><label>Datum<input id="fChildPlanDate" type="date" value="${todayISO()}"></label><label class="switch-line"><input id="fChildPlanRepeat" type="checkbox"> Iedere week herhalen</label><label class="switch-line"><input id="fChildPlanAllDay" type="checkbox"> Hele dag</label><div class="time-row" id="childPlanTimes"><label>Begintijd<input id="fChildPlanStart" type="time" value="08:30"></label><label>Eindtijd<input id="fChildPlanEnd" type="time" value="17:00"></label></div><label>Locatie<input id="fChildPlanLocation" placeholder="Bijv. opvang"></label><label>Brengen door<input id="fChildDropoff" placeholder="Bijv. mama"></label><label>Ophalen door<input id="fChildPickup" placeholder="Bijv. papa"></label></div>`},
-    childFood:{title:"Eten & drinken bijhouden",html:`<div class="form-grid"><label>Datum<input id="fChildFoodDate" type="date" value="${todayISO()}"></label><label>Moment<select id="fChildFoodMoment"><option>Ontbijt</option><option>Tussendoor</option><option>Lunch</option><option>Tussendoor 2</option><option>Avondeten</option></select></label><label>Wat gegeten?<input id="fChildFood" placeholder="Bijv. banaan en yoghurt"></label><label>Hoeveel?<select id="fChildFoodAmount"><option>Alles</option><option>Beetje</option><option>Niet</option></select></label><label>Drinken<input id="fChildDrink" placeholder="Bijv. water, melk"></label></div>`},
+    childFood:{title:"Eetmoment",html:(()=>{
+      const c=selectedChild();
+      const raw=String(catIndex||"");
+      const [dateArg,momentArg]=raw.includes("|")?raw.split("|"):[localStorage.getItem("lumiChildFoodDate")||todayISO(),raw||"Ontbijt"];
+      const date=dateArg||todayISO();
+      const moment=momentArg||"Ontbijt";
+      const existing=c?childFoodMoment(c,date,moment):null;
+      const familyDinner=moment==="Avondeten"?familyDinnerForDate(date):"";
+      return `<div class="form-grid">
+        <input id="fChildFoodOriginalMoment" type="hidden" value="${moment}">
+        <label>Datum<input id="fChildFoodDate" type="date" value="${date}"></label>
+        <label>Moment<select id="fChildFoodMoment">${childFoodMoments().map(m=>`<option ${m===moment?"selected":""}>${m}</option>`).join("")}</select></label>
+        ${familyDinner?`<div class="child-family-dinner"><small>Gezinsmaaltijd</small><strong>${familyDinner}</strong><button type="button" class="link-btn" id="useFamilyDinner">Gebruik deze maaltijd</button></div>`:""}
+        ${(c?.foodFavorites||[]).length?`<div><small>Favorieten</small><div class="ingredient-chips">${c.foodFavorites.map(x=>`<button type="button" data-fill-child-food="${x}">${x}</button>`).join("")}</div></div>`:""}
+        <label>Wat gegeten?<input id="fChildFood" value="${existing?.food||""}" placeholder="Bijv. banaan en yoghurt"></label>
+        <label>Hoeveel?<select id="fChildFoodAmount">${["Alles","Meeste","Helft","Beetje","Niet"].map(x=>`<option ${existing?.amount===x?"selected":""}>${x}</option>`).join("")}</select></label>
+        <label>Drinken<input id="fChildDrink" value="${existing?.drink||""}" placeholder="Bijv. water, melk"></label>
+        <label>Notitie<textarea id="fChildFoodNote" rows="3" placeholder="Bijv. voor het eerst geprobeerd">${existing?.note||""}</textarea></label>
+        <label class="switch-line"><input id="fChildFoodFavorite" type="checkbox"> Bewaar eten als favoriet</label>
+      </div>`;
+    })()},
     childCarry:{title:"Meenemen toevoegen",html:`<div class="form-grid"><label>Wat moet mee?<input id="fChildCarryText" placeholder="Bijv. gymtas, drinkbeker"></label><label>Datum<input id="fChildCarryDate" type="date" value="${todayISO()}"></label><label class="switch-line"><input id="fChildCarryRepeat" type="checkbox"> Iedere week op deze dag</label></div>`},
     childRoutine:{title:"Routine toevoegen",html:`<div class="form-grid"><label>Routine<input id="fChildRoutineTitle" placeholder="Bijv. tandenpoetsen, vitamine, voorlezen"></label><label>Tijd<input id="fChildRoutineTime" type="time" value="19:00"></label><p class="subtle">Op welke dagen?</p><div class="choice-grid">${["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"].map(d=>`<label class="choice"><input type="checkbox" name="childRoutineDay" value="${d}" checked>${d}</label>`).join("")}</div></div>`},
     childNote:{title:"Notitie toevoegen",html:`<div class="form-grid"><label>Datum<input id="fChildNoteDate" type="date" value="${todayISO()}"></label><label>Notitie<textarea id="fChildNoteText" rows="4" placeholder="Bijv. vond mango heel lekker"></textarea></label></div>`},
@@ -1428,6 +1557,17 @@ function openModal(type, catIndex=null){
     syncMealFields();
   }
 
+  if(type==="childFood"){
+    const useFamily=document.getElementById("useFamilyDinner");
+    if(useFamily) useFamily.onclick=()=>{
+      const meal=familyDinnerForDate(document.getElementById("fChildFoodDate").value||todayISO());
+      document.getElementById("fChildFood").value=meal;
+    };
+    document.querySelectorAll("[data-fill-child-food]").forEach(b=>b.onclick=()=>{
+      document.getElementById("fChildFood").value=b.dataset.fillChildFood;
+    });
+  }
+
   if(type==="childPlan"){
     const allDay=document.getElementById("fChildPlanAllDay");
     const times=document.getElementById("childPlanTimes");
@@ -1510,8 +1650,21 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
     const c=selectedChild(); if(!c)return;
     const date=document.getElementById("fChildFoodDate").value||todayISO();
     const moment=document.getElementById("fChildFoodMoment").value;
-    c.foodLogs=c.foodLogs.filter(x=>!(x.date===date && x.moment===moment));
-    c.foodLogs.push({id:Date.now(),date,moment,food:document.getElementById("fChildFood").value.trim(),amount:document.getElementById("fChildFoodAmount").value,drink:document.getElementById("fChildDrink").value.trim()});
+    const originalMoment=document.getElementById("fChildFoodOriginalMoment")?.value||moment;
+    const foodValue=document.getElementById("fChildFood").value.trim();
+    const old=(c.foodLogs||[]).find(x=>x.date===date && x.moment===originalMoment);
+    c.foodLogs=(c.foodLogs||[]).filter(x=>!(x.date===date && (x.moment===moment || x.moment===originalMoment)));
+    c.foodLogs.push({
+      id:old?.id||Date.now(),
+      date,
+      moment,
+      food:foodValue,
+      amount:document.getElementById("fChildFoodAmount").value,
+      drink:document.getElementById("fChildDrink").value.trim(),
+      note:document.getElementById("fChildFoodNote").value.trim()
+    });
+    if(document.getElementById("fChildFoodFavorite")?.checked) saveChildFavorite(c,foodValue);
+    localStorage.setItem("lumiChildFoodDate",date);
   }
   if(t==="childCarry"){
     const c=selectedChild(); if(!c)return;

@@ -64,10 +64,10 @@ h2{font-size:24px;margin:0}
 .check{appearance:none;width:24px;height:24px;border:2px solid #cfc8be;border-radius:50%;position:relative;flex:0 0 auto}
 .check:checked{border-color:var(--yellow);background:var(--yellow)}
 .check:checked::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:15px;font-weight:900}
-.bottom-nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(680px,100%);display:grid;grid-template-columns:repeat(var(--nav-count,6),minmax(0,1fr));gap:2px;background:rgba(255,253,249,.94);border-top:1px solid var(--line);padding:8px 4px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(16px);z-index:20;overflow:hidden}
-.nav-item{border:0;background:transparent;border-radius:13px;padding:6px 1px;color:#696d74;display:grid;gap:1px;place-items:center;min-width:0;width:100%;overflow:hidden}
-.nav-item span{font-size:clamp(15px,4vw,18px);line-height:1}
-.nav-item small{font-size:clamp(7px,2.15vw,9px);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:clip;max-width:100%}
+.bottom-nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(680px,100%);display:grid;grid-template-columns:repeat(var(--nav-count,6),minmax(0,1fr));gap:1px;background:rgba(255,253,249,.96);border-top:1px solid var(--line);padding:7px 2px calc(7px + env(safe-area-inset-bottom));backdrop-filter:blur(16px);z-index:20;overflow:hidden;box-sizing:border-box}
+.nav-item{border:0;background:transparent;border-radius:11px;padding:5px 0;color:#696d74;display:grid;gap:1px;place-items:center;min-width:0;width:100%;max-width:100%;overflow:hidden;box-sizing:border-box}
+.nav-item span{font-size:clamp(13px,3.4vw,17px);line-height:1;min-width:0}
+.nav-item small{font-size:clamp(6px,1.85vw,8px);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:clip;max-width:100%;letter-spacing:-.02em}
 .nav-item.active{color:#fff}
 .nav-item[data-page=home].active{background:var(--blue)}
 .nav-item[data-page=budget].active{background:var(--blue)}
@@ -823,3 +823,56 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
 .child-today-action span{font-size:10px;color:var(--muted);margin-top:2px}
 .child-today-action:active{transform:scale(.99)}
 .home-child-quick-add{width:100%;border:1px dashed var(--sage);background:var(--sage-soft);text-align:left}
+
+/* Definitieve navigatie-fix: altijd één regel, ook met Kinderen aan */
+.bottom-nav{
+  grid-template-columns:repeat(var(--nav-count,6),minmax(0,1fr))!important;
+  gap:1px!important;
+  padding-left:2px!important;
+  padding-right:2px!important;
+  overflow:hidden!important;
+}
+.bottom-nav .nav-item{
+  min-width:0!important;
+  width:100%!important;
+  max-width:100%!important;
+  padding:5px 0!important;
+}
+.bottom-nav .nav-item .nav-mark{
+  font-size:clamp(12px,3.2vw,16px)!important;
+}
+.bottom-nav .nav-item small{
+  font-size:clamp(6px,1.75vw,8px)!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:clip!important;
+  max-width:100%!important;
+}
+@media(max-width:380px){
+  .bottom-nav .nav-item .nav-mark{font-size:12px!important}
+  .bottom-nav .nav-item small{font-size:6px!important}
+}
+
+/* Kinderen > Eten */
+.child-food-dashboard{border-top:5px solid var(--sage)}
+.child-food-datebar{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:10px}
+.child-food-datebar>div{display:grid;gap:2px;text-align:center}
+.child-food-datebar small{color:var(--muted)}
+.child-food-datebar .compact{padding:9px 6px}
+.child-food-progress{height:8px;background:#e9ede6;border-radius:999px;overflow:hidden;margin:12px 0 14px}
+.child-food-progress span{display:block;height:100%;background:var(--sage-deep);border-radius:inherit}
+.child-food-moments{display:grid;gap:8px}
+.child-food-moment{width:100%;border:1px solid var(--line);background:#fff;border-radius:13px;padding:11px;display:flex;justify-content:space-between;gap:12px;align-items:center;text-align:left;color:inherit}
+.child-food-moment.filled{background:var(--sage-soft);border-color:var(--sage)}
+.child-food-moment-main{display:grid;gap:3px;min-width:0}
+.child-food-moment-main small{color:var(--muted);font-size:11px}
+.child-food-moment-main em{font-size:10px;color:var(--sage-deep);font-style:normal}
+.child-food-edit{font-size:10px;font-weight:800;color:var(--sage-deep);white-space:nowrap}
+.child-food-favorites{display:grid;gap:7px;margin-top:14px}
+.child-food-favorites>.ingredient-chips button,
+#modalForm .ingredient-chips button{border:0;border-radius:999px;padding:7px 9px;background:#eef2ea;color:#40503B;font-weight:700}
+.child-food-history{display:grid;gap:6px;margin-top:16px}
+.child-food-history-row{border:0;background:#f8f7f3;border-radius:10px;padding:9px 10px;display:flex;justify-content:space-between;align-items:center;color:inherit}
+.child-food-actions{margin-bottom:18px}
+.child-family-dinner{padding:10px;border-radius:12px;background:var(--sage-soft);display:grid;gap:4px}
+.child-family-dinner small{color:var(--sage-deep);font-weight:700}
