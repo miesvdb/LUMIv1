@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#3154c7" />
-  <title>Mijn Leven</title>
+  <title>Lumi</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Mijn Leven" />
+  <meta name="apple-mobile-web-app-title" content="Lumi" />
   <link rel="apple-touch-icon" href="icon-192.png" />
 </head>
 <body>
@@ -19,17 +19,28 @@
         <div class="eyebrow" id="todayLabel">Vandaag</div>
         <h1 id="pageTitle">Goedemorgen</h1>
       </div>
-      <button class="icon-btn" id="quickAddBtn" aria-label="Snel toevoegen">＋</button>
+      <button class="icon-btn" id="quickAddBtn" aria-label="Snel toevoegen"><span class="plus-symbol">+</span></button>
     </header>
 
+    
+    <section id="onboarding" class="onboarding hidden">
+      <div class="onboard-card">
+        <div class="onboard-progress"><span id="onboardProgress"></span></div>
+        <div id="onboardStep"></div>
+        <div class="modal-actions">
+          <button id="onboardBack" class="secondary" type="button">Terug</button>
+          <button id="onboardNext" class="primary" type="button">Volgende</button>
+        </div>
+      </div>
+    </section>
     <main id="content" class="content"></main>
 
     <nav class="bottom-nav" aria-label="Hoofdnavigatie">
-      <button class="nav-item active" data-page="home"><span>⌂</span><small>Vandaag</small></button>
-      <button class="nav-item" data-page="budget"><span>◫</span><small>Budget</small></button>
-      <button class="nav-item" data-page="meals"><span>☕</span><small>Eten</small></button>
-      <button class="nav-item" data-page="agenda"><span>▣</span><small>Agenda</small></button>
-      <button class="nav-item" data-page="cleaning"><span>✦</span><small>Schoonmaak</small></button>
+      <button class="nav-item active" data-page="home"><span class="nav-mark">H</span><small>Vandaag</small></button>
+      <button class="nav-item" data-page="budget"><span class="nav-mark">B</span><small>Budget</small></button>
+      <button class="nav-item" data-page="meals"><span class="nav-mark">M</span><small>Eten</small></button>
+      <button class="nav-item" data-page="agenda"><span class="nav-mark">A</span><small>Agenda</small></button>
+      <button class="nav-item" data-page="cleaning"><span class="nav-mark">S</span><small>Schoonmaak</small></button>
     </nav>
   </div>
 

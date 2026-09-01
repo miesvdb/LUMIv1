@@ -1,6 +1,6 @@
 {
-  "name": "Mijn Leven",
-  "short_name": "Mijn Leven",
+  "name": "Lumi",
+  "short_name": "Lumi",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#fbf8f2",

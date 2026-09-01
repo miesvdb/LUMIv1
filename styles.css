@@ -22,7 +22,7 @@ button{cursor:pointer}
 .eyebrow{font-size:13px;color:var(--muted);margin-bottom:3px}
 h1{font-size:34px;line-height:1.05;margin:0;font-weight:650;letter-spacing:-1.2px}
 h2{font-size:24px;margin:0}
-.hand{font-family:"Comic Sans MS","Bradley Hand",cursive;font-weight:500}
+.hand{font-family:"Bodoni 72","Bodoni MT","Didot","Times New Roman",serif;font-style:italic;font-weight:400;letter-spacing:-.02em}
 .icon-btn{border:1px solid var(--line);background:#fff;border-radius:50%;width:44px;height:44px;font-size:28px;line-height:1;box-shadow:var(--shadow)}
 .content{display:grid;gap:16px;padding-bottom:16px}
 .hero{border-radius:26px;padding:22px;color:white;box-shadow:var(--shadow);overflow:hidden;position:relative}
@@ -91,3 +91,45 @@ textarea{min-height:84px;resize:vertical}
 .empty{padding:22px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:18px}
 .money-input{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:420px){h1{font-size:30px}.grid2{grid-template-columns:1fr}.hero h2{font-size:30px}}
+
+.hidden{display:none!important}
+.onboarding{position:fixed;inset:0;background:var(--paper);z-index:100;padding:calc(28px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom));overflow:auto}
+.onboard-card{max-width:620px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:28px;padding:22px;box-shadow:var(--shadow)}
+.onboard-progress{height:8px;background:#ece8e1;border-radius:99px;overflow:hidden;margin-bottom:28px}
+.onboard-progress span{display:block;height:100%;background:var(--blue);border-radius:99px;transition:.25s}
+.onboard-hero{text-align:center;padding:18px 8px 24px}
+.onboard-hero .big{font-size:58px;margin-bottom:10px}
+.onboard-hero h2{font-size:32px;line-height:1.05}
+.onboard-hero p{color:var(--muted);line-height:1.5}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.choice{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff}
+.choice input{width:auto;margin-right:7px}
+.settings-card{display:grid;gap:10px}
+
+/* Lumi v2 */
+.brand-script{font-family:"Bodoni 72","Bodoni MT","Didot","Times New Roman",serif;font-style:italic;font-weight:400;letter-spacing:-.04em}
+.hero .brand-script{font-size:1.12em}
+.hero .decor-letter{position:absolute;right:22px;bottom:10px;font-family:"Bodoni 72","Bodoni MT","Didot","Times New Roman",serif;font-style:italic;font-size:68px;opacity:.22}
+.nav-mark{font-family:"Bodoni 72","Bodoni MT","Didot","Times New Roman",serif;font-weight:700;font-size:18px!important}
+.plus-symbol{font-family:Georgia,serif}
+.task-row.done{opacity:.42;background:#f4f1eb}
+.task-row.done strong{text-decoration:line-through;text-decoration-thickness:1px}
+.task-check{appearance:none;width:24px;height:24px;border:1.8px solid #bbb3a8;border-radius:50%;flex:0 0 auto;position:relative;background:white}
+.task-check:checked{background:var(--blue);border-color:var(--blue)}
+.task-check:checked::after{content:"";position:absolute;width:8px;height:4px;border-left:2px solid white;border-bottom:2px solid white;transform:rotate(-45deg);left:6px;top:7px}
+.cleaning-task .task-check:checked{background:var(--yellow);border-color:var(--yellow)}
+.chart-card{padding:18px}
+.chart-wrap{height:230px;margin-top:12px}
+.chart-wrap svg{width:100%;height:100%;overflow:visible}
+.chart-grid{stroke:#e6e0d8;stroke-width:1}
+.chart-label{font-size:11px;fill:#7a7d83}
+.chart-income{fill:#55a83d}
+.chart-expense{fill:#d6a23a}
+.chart-legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:12px}
+.legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px}
+.day-picker{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.day-pill{position:relative}
+.day-pill input{position:absolute;opacity:0;pointer-events:none}
+.day-pill span{display:grid;place-items:center;min-width:38px;height:34px;padding:0 8px;border:1px solid var(--line);border-radius:99px;background:#fff;font-size:12px;font-weight:700}
+.day-pill input:checked+span{background:#f6df8e;border-color:#e0b93d}
+.subtle{color:var(--muted)}
