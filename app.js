@@ -14,6 +14,7 @@ const defaults = {
   savingsGoals: [],
   budgetCorrections: {},
   categoryCorrections: {},
+  savingsForecast:{openingBalance:0,monthlyPlans:{}},
   children: [],
   mealIngredients: {},
   meals: {
@@ -362,6 +363,9 @@ function migrateState(){
 
   state.budgetCorrections=state.budgetCorrections && typeof state.budgetCorrections==="object" ? state.budgetCorrections : {};
   state.categoryCorrections=state.categoryCorrections && typeof state.categoryCorrections==="object" ? state.categoryCorrections : {};
+  state.savingsForecast=state.savingsForecast && typeof state.savingsForecast==="object" ? state.savingsForecast : {openingBalance:0,monthlyPlans:{}};
+  state.savingsForecast.monthlyPlans=state.savingsForecast.monthlyPlans && typeof state.savingsForecast.monthlyPlans==="object" ? state.savingsForecast.monthlyPlans : {};
+  state.savingsForecast.openingBalance=Math.max(0,Number(state.savingsForecast.openingBalance||0));
   state.children=Array.isArray(state.children)?state.children.map(normalizeChild):[];
   state.mealIngredients=state.mealIngredients && typeof state.mealIngredients==="object" ? state.mealIngredients : {};
   state.shopping=Array.isArray(state.shopping)?state.shopping:[];
@@ -425,11 +429,13 @@ function homePage(){
     meal:childMealForDay(child,dayMap[new Date().getDay()])
   })):[];
 
-  const taskRow=(kind,id,title,sub,color)=>`<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"} ${isDone(kind,id)?"done":""}">
-      <input class="task-check" type="checkbox" data-home-task="${kind}" data-task-id="${id}" ${isDone(kind,id)?"checked":""}>
-      <div class="row-main"><strong>${title}</strong><small>${sub}</small></div>
-      <span class="pill">${isDone(kind,id)?"Gedaan":"Vandaag"}</span>
+  const taskRow=(kind,id,title,sub,color)=>{
+    if(isDone(kind,id)) return "";
+    return `<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"}">
+      <input class="task-check" type="checkbox" data-home-task="${kind}" data-task-id="${id}">
+      <div class="row-main"><strong>${title}</strong><small>${sub}</small></div><span class="pill">Vandaag</span>
     </label>`;
+  };
   return `
     <section class="hero theme-blue">
       <h2>Goedemorgen${profile.name ? ", "+profile.name : ""}</h2>
@@ -459,19 +465,19 @@ function homePage(){
       ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd","#CDBB80")}
       ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,cleaningScheduleLabel(x),"#A5BCD6")).join("")}
       ${childrenToday.map(({child,plans,carry,routines,food,meal})=>{
-        const planRows=plans.map(p=>`<label class="row task-row home-task-child ${isDone("childplan",`${child.id}-${p.id}`,today)?"done":""}">
+        const planRows=plans.filter(p=>!isDone("childplan",`${child.id}-${p.id}`,today)).map(p=>`<label class="row task-row home-task-child ${isDone("childplan",`${child.id}-${p.id}`,today)?"done":""}">
           <input class="task-check" type="checkbox" data-home-child-plan="${child.id}|${p.id}" ${isDone("childplan",`${child.id}-${p.id}`,today)?"checked":""}>
           <div class="row-main"><strong>${p.allDay?"Hele dag":p.startTime||""} · ${child.name}: ${p.title}</strong><small>${p.location||"Planning kind"}</small></div><span class="pill">Kind</span>
         </label>`).join("");
-        const carryRows=carry.map(x=>`<label class="row task-row home-task-child ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}">
+        const carryRows=carry.filter(x=>!isDone("childcarry",`${child.id}-${x.id}`,today)).map(x=>`<label class="row task-row home-task-child ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}">
           <input class="task-check" type="checkbox" data-home-child-carry="${child.id}|${x.id}" ${isDone("childcarry",`${child.id}-${x.id}`,today)?"checked":""}>
           <div class="row-main"><strong>${child.name}: ${x.text}</strong><small>Meenemen</small></div><span class="pill">Kind</span>
         </label>`).join("");
-        const routineRows=routines.map(r=>`<label class="row task-row home-task-child ${isDone("childroutine",`${child.id}-${r.id}`,today)?"done":""}">
+        const routineRows=routines.filter(r=>!isDone("childroutine",`${child.id}-${r.id}`,today)).map(r=>`<label class="row task-row home-task-child ${isDone("childroutine",`${child.id}-${r.id}`,today)?"done":""}">
           <input class="task-check" type="checkbox" data-home-child-routine="${child.id}|${r.id}" ${isDone("childroutine",`${child.id}-${r.id}`,today)?"checked":""}>
           <div class="row-main"><strong>${r.time?`${r.time} · `:""}${child.name}: ${r.title}</strong><small>Routine</small></div><span class="pill">Kind</span>
         </label>`).join("");
-        const mealRow=meal?`<label class="row task-row home-task-child ${isDone("childmeal",child.id,today)?"done":""}">
+        const mealRow=meal && !isDone("childmeal",child.id,today)?`<label class="row task-row home-task-child ${isDone("childmeal",child.id,today)?"done":""}">
           <input class="task-check" type="checkbox" data-home-child-meal="${child.id}" ${isDone("childmeal",child.id,today)?"checked":""}>
           <div class="row-main"><strong>${child.name}: avondeten ${meal}</strong><small>Eten</small></div><span class="pill">Kind</span>
         </label>`:"";
@@ -817,6 +823,39 @@ function transactionLabel(t){
   if(t.type==="expense_adjustment") return "Handmatige correctie uitgaven";
   return t.label||"Transactie";
 }
+
+function plannedSaving(monthKey){
+  const plans=state.savingsForecast?.monthlyPlans||{};
+  return plans[monthKey]===undefined ? Math.max(0,Number(profile.savingsGoal||0)) : Math.max(0,Number(plans[monthKey]||0));
+}
+function savingsForecastRows(count=12){
+  const start=todayISO().slice(0,7);
+  let balance=Math.max(0,Number(state.savingsForecast?.openingBalance||0));
+  return [...Array(count)].map((_,i)=>{
+    const key=monthShift(start,i), totals=budgetTotals(key), planned=plannedSaving(key);
+    const freeAfterFixed=totals.totalIncome-totals.fixedExpenses-planned;
+    balance+=planned;
+    return {key,label:monthLabel(key),income:totals.totalIncome,fixed:totals.fixedExpenses,planned,freeAfterFixed,balance};
+  });
+}
+function budgetForecastCard(){
+  const rows=savingsForecastRows(12);
+  return `<div class="card forecast-card">
+    <div class="section-title"><h3>Vooruitblik</h3><span class="pill">12 maanden</span></div>
+    <p class="subtle">Plan hoeveel je per maand wilt sparen. Lumi berekent je verwachte spaarsaldo en wat er na vaste lasten en gepland sparen vrij blijft.</p>
+    <form id="forecastBalanceForm" class="inline-budget-form forecast-balance-form">
+      <label>Huidig spaarsaldo<input id="forecastOpeningBalance" type="number" min="0" step="0.01" value="${Number(state.savingsForecast?.openingBalance||0)}"></label>
+      <button class="secondary" type="submit">Opslaan</button>
+    </form>
+    <div class="forecast-list">${rows.map(r=>`<div class="forecast-row">
+      <div class="forecast-month"><strong>${r.label}</strong><small>Inkomen ${euro(r.income)} · vaste lasten ${euro(r.fixed)}</small></div>
+      <label>Plan sparen<input type="number" min="0" step="0.01" data-forecast-plan="${r.key}" value="${Number(r.planned).toFixed(2)}"></label>
+      <div><small>Vrij na vast + sparen</small><strong>${euro(r.freeAfterFixed)}</strong></div>
+      <div><small>Verwacht spaarsaldo</small><strong>${euro(r.balance)}</strong></div>
+    </div>`).join("")}</div>
+  </div>`;
+}
+
 function budgetPage(){
   const totals=budgetTotals(budgetMonth);
   const tx=budgetTransactions(budgetMonth).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"") || Number(b.id)-Number(a.id));
@@ -868,6 +907,8 @@ function budgetPage(){
         <button class="secondary" type="submit">Opslaan</button>
       </form>
     </div>
+
+    ${budgetForecastCard()}
 
     <div class="section-title"><h3>Toevoegen</h3></div>
     <div class="fab-row budget-add-row">
@@ -1060,10 +1101,10 @@ function agendaCalendarView(items){
     const days=[...Array(7)].map((_,i)=>new Date(start.getFullYear(),start.getMonth(),start.getDate()+i,12));
     return `<div class="week-grid">${days.map(d=>{
       const iso=isoLocal(d), ev=items.filter(a=>a.date===iso);
-      return `<div class="week-day ${iso===todayISO()?"today":""}">
+      return `<button type="button" class="week-day calendar-date-button ${iso===todayISO()?"today":""}" data-agenda-date="${iso}">
         <h4>${d.toLocaleDateString("nl-NL",{weekday:"short",day:"numeric"})}</h4>
         ${ev.length?ev.map(a=>`<div class="week-event"><strong>${a.title}</strong><br><span>${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`}</span></div>`).join(""):`<span class="subtle">—</span>`}
-      </div>`;
+      </button>`;
     }).join("")}</div>`;
   }
 
@@ -1075,21 +1116,24 @@ function agendaCalendarView(items){
       ${["Ma","Di","Wo","Do","Vr","Za","Zo"].map(x=>`<div class="dow">${x}</div>`).join("")}
       ${cells.map(d=>{
         const iso=isoLocal(d), ev=items.filter(a=>a.date===iso);
-        return `<div class="month-cell ${d.getMonth()!==m?"outside":""} ${iso===todayISO()?"today":""}">
+        return `<button type="button" class="month-cell calendar-date-button ${d.getMonth()!==m?"outside":""} ${iso===todayISO()?"today":""}" data-agenda-date="${iso}">
           <span class="num">${d.getDate()}</span>
           ${ev.slice(0,2).map(a=>`<span class="month-event">${a.allDay?"Hele dag":(a.startTime||a.time||"")} ${a.title}</span>`).join("")}
           ${ev.length>2?`<span class="month-event">+${ev.length-2} meer</span>`:""}
-        </div>`;
+        </button>`;
       }).join("")}
     </div>`;
   }
 
   const y=agendaCursor.getFullYear();
   return `<div class="year-grid">${[...Array(12)].map((_,m)=>{
-    const ev=items.filter(a=>dateObj(a.date).getFullYear()===y && dateObj(a.date).getMonth()===m);
+    const first=new Date(y,m,1,12), offset=(first.getDay()+6)%7, days=new Date(y,m+1,0).getDate();
     return `<div class="year-month"><strong>${new Date(y,m,1).toLocaleDateString("nl-NL",{month:"long"})}</strong>
-      <span class="subtle">${ev.length} ${ev.length===1?"afspraak":"afspraken"}</span>
-      <div class="year-dots" aria-hidden="true">${ev.slice(0,24).map(()=>`<span class="year-dot"></span>`).join("")}</div>
+      <div class="year-mini-head">${["M","D","W","D","V","Z","Z"].map(x=>`<span>${x}</span>`).join("")}</div>
+      <div class="year-mini-days">
+        ${[...Array(offset)].map(()=>`<span></span>`).join("")}
+        ${[...Array(days)].map((_,i)=>{const d=new Date(y,m,i+1,12),iso=isoLocal(d),has=items.some(a=>a.date===iso);return `<button type="button" class="${iso===todayISO()?"today":""} ${has?"has-event":""}" data-agenda-date="${iso}">${i+1}</button>`;}).join("")}
+      </div>
     </div>`;
   }).join("")}</div>`;
 }
@@ -1128,6 +1172,20 @@ function bindPageEvents(){
     };
   }
 
+
+  const forecastBalanceForm=document.getElementById("forecastBalanceForm");
+  if(forecastBalanceForm) forecastBalanceForm.onsubmit=e=>{
+    e.preventDefault();
+    state.savingsForecast=state.savingsForecast||{openingBalance:0,monthlyPlans:{}};
+    state.savingsForecast.openingBalance=Math.max(0,Number(document.getElementById("forecastOpeningBalance").value||0));
+    save(); render();
+  };
+  document.querySelectorAll("[data-forecast-plan]").forEach(inp=>inp.onchange=()=>{
+    state.savingsForecast=state.savingsForecast||{openingBalance:0,monthlyPlans:{}};
+    state.savingsForecast.monthlyPlans=state.savingsForecast.monthlyPlans||{};
+    state.savingsForecast.monthlyPlans[inp.dataset.forecastPlan]=Math.max(0,Number(inp.value||0));
+    save(); render();
+  });
 
   document.querySelectorAll("[data-budget-month]").forEach(b=>b.onclick=()=>{
     budgetMonth=monthShift(budgetMonth,Number(b.dataset.budgetMonth));
@@ -1292,6 +1350,9 @@ function bindPageEvents(){
   });
 
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));
+  document.querySelectorAll("[data-agenda-date]").forEach(b=>b.onclick=e=>{
+    e.preventDefault(); openModal("agenda",b.dataset.agendaDate);
+  });
   document.querySelectorAll("[data-agenda-view]").forEach(b=>b.onclick=()=>{
     agendaView=b.dataset.agendaView;
     localStorage.setItem("lumiAgendaView",agendaView);
@@ -1392,7 +1453,7 @@ function openModal(type, catIndex=null){
     expense:{title:"Uitgave toevoegen",html:`<div class="form-grid"><label>Omschrijving<input id="fExpenseLabel" placeholder="Bijv. supermarkt"></label><label>Categorie<select id="fCat">${state.budgets.map((b,i)=>`<option value="${i}" ${i===catIndex?"selected":""}>${b.name}</option>`).join("")}</select></label><label>Bedrag<input id="fAmount" type="number" step="0.01" min="0" placeholder="0,00"></label><label>Datum<input id="fExpenseDate" type="date" value="${budgetMonth===todayISO().slice(0,7)?todayISO():budgetMonth+"-01"}"></label></div>`},
     agenda:{title:"Afspraak toevoegen",html:`<div class="form-grid">
       <label>Titel<input id="fTitle" placeholder="Bijv. tandarts"></label>
-      <label>Datum<input id="fDate" type="date" value="${todayISO()}"></label>
+      <label>Datum<input id="fDate" type="date" value="${typeof catIndex==="string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(catIndex)?catIndex:todayISO()}"></label>
       <label class="switch-line"><input id="fAllDay" type="checkbox"> Hele dag</label>
       <div class="time-row" id="timeFields">
         <label>Begintijd<input id="fStartTime" type="time" value="09:00"></label>

@@ -1,4 +1,4 @@
-const CACHE="lumi-children-food-nav-3";
+const CACHE="lumi-future-agenda-home-4";
 const ASSETS=["./","./index.html","./styles.css","./app.js","./manifest.json","./icon-192.png","./icon-512.png"];
 
 self.addEventListener("install",event=>{
