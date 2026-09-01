@@ -898,3 +898,29 @@ h1,h2,h3,.brand-script,.hero h2,.stat strong,.click-card strong{
 .year-mini-days button{border:0;background:transparent;border-radius:6px;padding:0;font-size:8px;color:var(--ink)}
 .year-mini-days button.has-event{background:#efe3e4;color:#4D0E12;font-weight:800}
 .year-mini-days button.today{outline:1px solid #4D0E12}
+
+/* Uitvouwbare budgetvooruitblik */
+.forecast-toggle{
+  width:100%;
+  border:0;
+  background:transparent;
+  color:inherit;
+  padding:0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  text-align:left;
+}
+.forecast-toggle>span:first-child{display:grid;gap:2px}
+.forecast-toggle small{color:var(--muted);font-size:10px}
+.forecast-toggle strong{font-size:18px}
+.forecast-toggle-right{display:flex;align-items:center;gap:9px}
+.forecast-chevron{
+  width:28px;height:28px;border-radius:50%;
+  display:grid;place-items:center;
+  background:#f0ebe5;color:#4A2E27;
+  font-size:18px;font-weight:800;
+}
+.forecast-content{margin-top:14px}
+.forecast-card:not(.open){padding-top:14px;padding-bottom:14px}

@@ -840,19 +840,31 @@ function savingsForecastRows(count=12){
 }
 function budgetForecastCard(){
   const rows=savingsForecastRows(12);
-  return `<div class="card forecast-card">
-    <div class="section-title"><h3>Vooruitblik</h3><span class="pill">12 maanden</span></div>
-    <p class="subtle">Plan hoeveel je per maand wilt sparen. Lumi berekent je verwachte spaarsaldo en wat er na vaste lasten en gepland sparen vrij blijft.</p>
-    <form id="forecastBalanceForm" class="inline-budget-form forecast-balance-form">
-      <label>Huidig spaarsaldo<input id="forecastOpeningBalance" type="number" min="0" step="0.01" value="${Number(state.savingsForecast?.openingBalance||0)}"></label>
-      <button class="secondary" type="submit">Opslaan</button>
-    </form>
-    <div class="forecast-list">${rows.map(r=>`<div class="forecast-row">
-      <div class="forecast-month"><strong>${r.label}</strong><small>Inkomen ${euro(r.income)} · vaste lasten ${euro(r.fixed)}</small></div>
-      <label>Plan sparen<input type="number" min="0" step="0.01" data-forecast-plan="${r.key}" value="${Number(r.planned).toFixed(2)}"></label>
-      <div><small>Vrij na vast + sparen</small><strong>${euro(r.freeAfterFixed)}</strong></div>
-      <div><small>Verwacht spaarsaldo</small><strong>${euro(r.balance)}</strong></div>
-    </div>`).join("")}</div>
+  const open=localStorage.getItem("lumiForecastOpen")==="1";
+  return `<div class="card forecast-card ${open?"open":""}">
+    <button type="button" class="forecast-toggle" data-toggle-forecast aria-expanded="${open}">
+      <span>
+        <small>Budget</small>
+        <strong>Vooruitblik</strong>
+      </span>
+      <span class="forecast-toggle-right">
+        <span class="pill">12 maanden</span>
+        <span class="forecast-chevron">${open?"−":"+"}</span>
+      </span>
+    </button>
+    <div class="forecast-content ${open?"":"hidden"}">
+      <p class="subtle">Plan hoeveel je per maand wilt sparen. Lumi berekent je verwachte spaarsaldo en wat er na vaste lasten en gepland sparen vrij blijft.</p>
+      <form id="forecastBalanceForm" class="inline-budget-form forecast-balance-form">
+        <label>Huidig spaarsaldo<input id="forecastOpeningBalance" type="number" min="0" step="0.01" value="${Number(state.savingsForecast?.openingBalance||0)}"></label>
+        <button class="secondary" type="submit">Opslaan</button>
+      </form>
+      <div class="forecast-list">${rows.map(r=>`<div class="forecast-row">
+        <div class="forecast-month"><strong>${r.label}</strong><small>Inkomen ${euro(r.income)} · vaste lasten ${euro(r.fixed)}</small></div>
+        <label>Plan sparen<input type="number" min="0" step="0.01" data-forecast-plan="${r.key}" value="${Number(r.planned).toFixed(2)}"></label>
+        <div><small>Vrij na vast + sparen</small><strong>${euro(r.freeAfterFixed)}</strong></div>
+        <div><small>Verwacht spaarsaldo</small><strong>${euro(r.balance)}</strong></div>
+      </div>`).join("")}</div>
+    </div>
   </div>`;
 }
 
@@ -1173,6 +1185,12 @@ function bindPageEvents(){
   }
 
 
+  document.querySelectorAll("[data-toggle-forecast]").forEach(b=>b.onclick=()=>{
+    const isOpen=localStorage.getItem("lumiForecastOpen")==="1";
+    localStorage.setItem("lumiForecastOpen",isOpen?"0":"1");
+    render();
+  });
+
   const forecastBalanceForm=document.getElementById("forecastBalanceForm");
   if(forecastBalanceForm) forecastBalanceForm.onsubmit=e=>{
     e.preventDefault();
@@ -1350,8 +1368,9 @@ function bindPageEvents(){
   });
 
   document.querySelectorAll("[data-settings]").forEach(b=>b.onclick=()=>startOnboarding(true));
-  document.querySelectorAll("[data-agenda-date]").forEach(b=>b.onclick=e=>{
-    e.preventDefault(); openModal("agenda",b.dataset.agendaDate);
+  document.querySelectorAll(".calendar-date-button[data-agenda-date], .year-mini-days [data-agenda-date]").forEach(b=>b.onclick=e=>{
+    e.preventDefault();
+    openModal("agenda",b.dataset.agendaDate);
   });
   document.querySelectorAll("[data-agenda-view]").forEach(b=>b.onclick=()=>{
     agendaView=b.dataset.agendaView;
