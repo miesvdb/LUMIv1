@@ -399,6 +399,15 @@ function render(){
 }
 
 
+function lumiDinnerForDate(iso){
+  const d=new Date(iso+"T12:00:00");
+  const days=["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
+  const entry=state.meals?.[days[d.getDay()]];
+  if(!entry) return "";
+  if(typeof entry==="string") return entry;
+  return entry.Diner||entry.dinner||entry.Avondeten||entry.avondeten||entry.meal||entry.title||"";
+}
+
 function lumiAssistantInsights(){
   const today=todayISO();
   const tomorrow=isoLocal(new Date(new Date(today+"T12:00:00").getTime()+86400000));
@@ -409,12 +418,8 @@ function lumiAssistantInsights(){
   const first=timedToday[0];
   let cleaningToday=[];
   try{cleaningToday=(state.cleaning||[]).filter(t=>cleaningDueOn(t,today)&&!isDone("clean",t.id));}catch(e){}
-  const mealDay=new Date(today+"T12:00:00").toLocaleDateString("nl-NL",{weekday:"long"}).toLowerCase();
   let dinner="";
-  try{
-    const meal=state.meals?.[mealDay]||state.mealPlan?.[mealDay]||"";
-    dinner=typeof meal==="string"?meal:(meal?.dinner||meal?.meal||meal?.title||"");
-  }catch(e){}
+  try{ dinner=lumiDinnerForDate(today); }catch(e){}
   let budget=null;
   try{budget=budgetTotals(today.slice(0,7));}catch(e){}
   const shoppingOpen=(state.shopping||[]).filter(x=>!x.done).length;
@@ -472,7 +477,7 @@ function homePage(){
   const appts=(state.agenda||[]).filter(a=>a.date===today).sort((a,b)=>(a.startTime||"00:00").localeCompare(b.startTime||"00:00"));
   const cleaningToday=(state.cleaning||[]).filter(x=>cleanDueOn(x,new Date()));
   const currentBudget=budgetTotals(today.slice(0,7));
-  const dinner=state.meals?.[dayMap[now.getDay()]]?.Diner || "Nog niet gepland";
+  const dinner=lumiDinnerForDate(today) || "Nog niet gepland";
   const openShopping=(state.shopping||[]).filter(x=>!x.done).length;
   const childrenToday=profile.childrenEnabled?(state.children||[]).map(child=>({
     child,plans:childPlansOn(child,today),carry:childCarryOn(child,today),
@@ -493,7 +498,7 @@ function homePage(){
     <section class="hero theme-blue home-main-hero home-main-hero-compact">
       <div class="home-hero-copy">
         <small>${now.toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</small>
-        <h2>Vandaag</h2>
+        <h2>${now.getHours()<12?"Goedemorgen":now.getHours()<18?"Goedemiddag":"Goedenavond"}${profile.name?", "+profile.name:""}</h2>
         <p>${lumiAssistantInsights().intro}</p>
       </div>
       <button type="button" class="home-quick-add home-quick-add-blue" data-home-quick-add aria-label="Vertel LUMI">+</button>

@@ -1,4 +1,4 @@
-const CACHE="lumi-home-less-double-v1-11";
+const CACHE="lumi-home-consistency-v1-12";
 const ASSETS=["./","./index.html","./styles.css","./app.js","./manifest.json","./icon-192.png","./icon-512.png"];
 
 self.addEventListener("install",event=>{
