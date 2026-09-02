@@ -296,25 +296,7 @@ function childAgendaItemsForView(){
 }
 function ensureChildrenNav(){
   const nav=document.querySelector(".bottom-nav");
-  if(!nav) return;
-  let btn=nav.querySelector('[data-page="children"]');
-  if(profile.childrenEnabled){
-    if(!btn){
-      btn=document.createElement("button");
-      btn.className="nav-item";
-      btn.dataset.page="children";
-      btn.innerHTML='<span class="nav-mark">K</span><small>Kinderen</small>';
-      const profileBtn=nav.querySelector('[data-page="profile"]');
-      nav.insertBefore(btn,profileBtn);
-      btn.onclick=()=>{currentPage="children";render();};
-    }
-  }else if(btn){
-    btn.remove();
-    if(currentPage==="children") currentPage="home";
-  }
-  const count=nav.querySelectorAll(".nav-item").length;
-  nav.style.setProperty("--nav-count",String(count));
-  nav.dataset.count=String(count);
+  if(nav) nav.style.setProperty("--nav-count","5");
 }
 
 function migrateState(){
@@ -407,7 +389,7 @@ function render(){
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage || (currentPage==="shopping" && b.dataset.page==="meals")));
   const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema",children:"Kinderen",profile:"Profiel"};
   pageTitle.textContent = titleMap[currentPage]||"Lumi";
-  const pages={home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage,children:childrenPage,profile:profilePage};
+  const pages={home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage,children:childrenPage,more:morePage,profile:profilePage};
   content.innerHTML = (pages[currentPage]||homePage)();
   bindPageEvents();
 }
@@ -649,6 +631,18 @@ function childrenPage(){
     <div class="list">
       ${(child.notes||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,8).map(n=>`<div class="row child-note"><div class="row-main"><strong>${n.text}</strong><small>${new Date((n.date||today)+"T12:00").toLocaleDateString("nl-NL",{day:"numeric",month:"long"})}</small></div><button class="link-btn" data-delete-child-item="notes|${n.id}">wis</button></div>`).join("")||`<div class="empty">Nog geen notities.</div>`}
     </div>`;
+}
+
+
+function morePage(){
+  return `<div class="page more-page">
+    <div class="professional-heading"><small>LUMI</small><h2>Meer</h2><p>Huishouden, gezin en instellingen op één rustige plek.</p></div>
+    <div class="more-grid">
+      <button class="more-card more-clean" type="button" data-more-page="cleaning"><span class="more-icon">S</span><span><strong>Schoonmaak</strong><small>Taken, ruimtes en planning</small></span><b>›</b></button>
+      ${profile.childrenEnabled?`<button class="more-card more-child" type="button" data-more-page="children"><span class="more-icon">K</span><span><strong>Kinderen</strong><small>Planning, eten, meenemen en routines</small></span><b>›</b></button>`:""}
+      <button class="more-card more-profile" type="button" data-more-page="profile"><span class="more-icon">P</span><span><strong>Profiel & instellingen</strong><small>Persoonlijk, huishouden en back-up</small></span><b>›</b></button>
+    </div>
+  </div>`;
 }
 
 function profilePage(){
@@ -1901,7 +1895,8 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
 });
 
 document.getElementById("quickAddBtn").onclick=()=>openModal(currentPage==="home"?"agenda":({budget:"expense",meals:"meal",shopping:"shopping",agenda:"agenda",cleaning:"cleaning"})[currentPage]);
-document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>{currentPage=b.dataset.page;render();});
+document.querySelectorAll("[data-more-page]").forEach(b=>b.onclick=()=>{currentPage=b.dataset.morePage;render();});
+  document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>{currentPage=b.dataset.page;render();});
 if("serviceWorker" in navigator){
   let refreshing=false;
   navigator.serviceWorker.register("sw.js").then(reg=>{
