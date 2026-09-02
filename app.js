@@ -455,9 +455,8 @@ function lumiAssistantBlock(){
   const data=lumiAssistantInsights();
   return `<section class="lumi-assistant">
     <div class="lumi-assistant-head">
-      <div><small>LUMI VOOR JOU</small><h3>Dit is handig om te weten</h3></div>
+      <div><small>LUMI VOOR JOU</small><h3>Voor jou</h3></div>
     </div>
-    <p class="lumi-assistant-intro">${data.intro}</p>
     ${data.insights.length?`<div class="lumi-insight-list">${data.insights.map(i=>`
       <button type="button" class="lumi-insight lumi-insight-${i.tone}" data-go="${i.go}">
         <span class="lumi-insight-copy"><small>${i.eyebrow}</small><strong>${i.title}</strong><span>${i.text}</span></span>
@@ -467,122 +466,90 @@ function lumiAssistantBlock(){
 }
 
 function homePage(){
-  const homeToday=todayISO();
-  const homeDate=new Date(homeToday+"T12:00:00");
-  const hourNow=new Date().getHours();
-  const greeting=hourNow<12?"Goedemorgen":hourNow<18?"Goedemiddag":"Goedenavond";
-
-  const today = todayISO();
-  const appts = state.agenda.filter(a=>a.date===today).sort((a,b)=>(a.startTime||"00:00").localeCompare(b.startTime||"00:00"));
-  const cleaningToday = state.cleaning.filter(x=>cleanDueOn(x,new Date()));
-  const currentBudget=budgetTotals(today.slice(0,7));
+  const today=todayISO();
+  const now=new Date();
   const dayMap={0:"Zondag",1:"Maandag",2:"Dinsdag",3:"Woensdag",4:"Donderdag",5:"Vrijdag",6:"Zaterdag"};
-  const dinner = state.meals[dayMap[new Date().getDay()]]?.Diner || "Nog niet gepland";
-
+  const appts=(state.agenda||[]).filter(a=>a.date===today).sort((a,b)=>(a.startTime||"00:00").localeCompare(b.startTime||"00:00"));
+  const cleaningToday=(state.cleaning||[]).filter(x=>cleanDueOn(x,new Date()));
+  const currentBudget=budgetTotals(today.slice(0,7));
+  const dinner=state.meals?.[dayMap[now.getDay()]]?.Diner || "Nog niet gepland";
+  const openShopping=(state.shopping||[]).filter(x=>!x.done).length;
   const childrenToday=profile.childrenEnabled?(state.children||[]).map(child=>({
-    child,
-    plans:childPlansOn(child,today),
-    carry:childCarryOn(child,today),
-    routines:childRoutinesOn(child,today),
-    food:childFoodOn(child,today),
-    meal:childMealForDay(child,dayMap[new Date().getDay()])
+    child,plans:childPlansOn(child,today),carry:childCarryOn(child,today),
+    routines:childRoutinesOn(child,today),food:childFoodOn(child,today),
+    meal:childMealForDay(child,dayMap[now.getDay()])
   })):[];
+  const firstTimed=appts.filter(a=>!isDone("agenda",a.id)&&!a.allDay&&a.startTime)[0];
 
-  const taskRow=(kind,id,title,sub,color)=>{
+  const taskRow=(kind,id,title,sub)=>{
     if(isDone(kind,id)) return "";
-    
-  const homeName=(profile.name||"").trim();
-  const agendaToday=(state.agenda||[]).filter(a=>a.date===homeToday);
-  const openAgendaToday=agendaToday.filter(a=>!isDone("agenda",a.id)).length;
-  const dueCleaningToday=(state.cleaning||[]).filter(t=>{
-    try{return cleaningDueOn(t,homeToday)&&!isDone("clean",t.id);}catch(e){return false;}
-  }).length;
-  const homeOpenCount=openAgendaToday+dueCleaningToday;
-  const firstTimed=agendaToday.filter(a=>!isDone("agenda",a.id)&&!a.allDay&&a.startTime).sort((a,b)=>(a.startTime||"").localeCompare(b.startTime||""))[0];
-  const homeSummary=`${homeOpenCount} ${homeOpenCount===1?"ding":"dingen"} vandaag${firstTimed?` · eerste afspraak ${firstTimed.startTime}`:""}`;
-
-  return `<section class="home-professional-summary">
-    <div class="home-greeting">
-      <small>${homeDate.toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</small>
-      <h2>${greeting}${homeName?`, ${homeName}`:""}</h2>
-      <p>${homeSummary}</p>
-    </div>
-    <button type="button" class="home-quick-add" data-home-quick-add aria-label="Vertel LUMI">+</button>
-  </section>
-  ${firstTimed?`<button type="button" class="home-next-card" data-go="agenda">
-    <small>Eerstvolgende</small>
-    <div><strong>${firstTimed.startTime}${firstTimed.endTime?` – ${firstTimed.endTime}`:""}</strong><span>${firstTimed.title||"Afspraak"}</span></div>
-    <b>›</b>
-  </button>`:""}
-  ${lumiAssistantBlock()}<div class="home-section-label"><span>Vandaag</span><small>Wat nu aandacht vraagt</small></div>
-  <label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"}">
+    return `<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"}">
       <input class="task-check" type="checkbox" data-home-task="${kind}" data-task-id="${id}">
       <div class="row-main"><strong>${title}</strong><small>${sub}</small></div><span class="pill">Vandaag</span>
     </label>`;
   };
+
   return `
-    <section class="hero theme-blue">
-      <h2>Goedemorgen${profile.name ? ", "+profile.name : ""}</h2>
-      <p>Een rustig overzicht van wat vandaag aandacht nodig heeft.</p>
+    <section class="hero theme-blue home-main-hero home-main-hero-compact">
+      <div class="home-hero-copy">
+        <small>${now.toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</small>
+        <h2>Vandaag</h2>
+        <p>${lumiAssistantInsights().intro}</p>
+      </div>
+      <button type="button" class="home-quick-add home-quick-add-blue" data-home-quick-add aria-label="Vertel LUMI">+</button>
       <div class="decor-letter">L</div>
     </section>
-    <div class="grid2">
-      <button class="click-card home-budget-widget" data-go="budget">
-        <small>Nog uit te geven</small><strong style="display:block;font-size:22px;margin-top:4px">${euro(currentBudget.remaining)}</strong>
-        <span class="go-label">Bekijk budget</span>
-      </button>
-      <button class="click-card home-shopping-widget" data-go="shopping">
-        <small>Boodschappenlijst</small><strong style="display:block;font-size:22px;margin-top:4px">${state.shopping.length} artikelen</strong>
-        <span class="go-label">Open lijst voor vandaag</span>
-      </button>
-    </div>
-    ${profile.childrenEnabled && childrenToday.length?`
-    <button class="click-card home-child-widget" data-go="children">
-      <small>Kinderen vandaag</small>
-      <strong>${childrenToday.map(x=>x.child.name).join(" · ")}</strong>
-      <span>${childrenToday.reduce((s,x)=>s+x.plans.length,0)} planning · ${childrenToday.reduce((s,x)=>s+x.carry.length,0)} mee · ${childrenToday.reduce((s,x)=>s+x.routines.length,0)} routines</span>
-      <span class="go-label">Open kindoverzicht</span>
+
+    ${firstTimed?`<button type="button" class="home-next-card" data-go="agenda">
+      <small>Eerstvolgende</small>
+      <div><strong>${firstTimed.startTime}${firstTimed.endTime?` – ${firstTimed.endTime}`:""}</strong><span>${firstTimed.title||"Afspraak"}</span></div><b>›</b>
     </button>`:""}
-    <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-go="agenda">bekijk agenda</button></div>
-    <div class="list">
-      ${appts.map(a=>taskRow("agenda",a.id,`${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`} · ${a.title}`,"Agenda","#4D0E12")).join("")}
-      ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd","#CDBB80")}
-      ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,cleaningScheduleLabel(x),"#A5BCD6")).join("")}
-      ${childrenToday.map(({child,plans,carry,routines,food,meal})=>{
-        const planRows=plans.filter(p=>!isDone("childplan",`${child.id}-${p.id}`,today)).map(p=>`<label class="row task-row home-task-child ${isDone("childplan",`${child.id}-${p.id}`,today)?"done":""}">
-          <input class="task-check" type="checkbox" data-home-child-plan="${child.id}|${p.id}" ${isDone("childplan",`${child.id}-${p.id}`,today)?"checked":""}>
+
+    ${lumiAssistantBlock()}
+
+    <div class="section-title home-today-title"><div><small>VANDAAG</small><h3>Wat aandacht vraagt</h3></div><button class="link-btn" data-go="agenda">Agenda</button></div>
+    <div class="list home-today-list">
+      ${appts.map(a=>taskRow("agenda",a.id,`${a.allDay?"Hele dag":`${a.startTime||a.time||""}${a.endTime?`–${a.endTime}`:""}`} · ${a.title}`,"Agenda")).join("")}
+      ${taskRow("meal","dinner",`Vanavond: ${dinner}`,"Maaltijd")}
+      ${cleaningToday.map(x=>taskRow("clean",x.id,x.task,cleaningScheduleLabel(x))).join("")}
+      ${childrenToday.map(({child,plans,carry,routines,meal})=>{
+        const planRows=plans.filter(p=>!isDone("childplan",`${child.id}-${p.id}`,today)).map(p=>`<label class="row task-row home-task-child">
+          <input class="task-check" type="checkbox" data-home-child-plan="${child.id}|${p.id}">
           <div class="row-main"><strong>${p.allDay?"Hele dag":p.startTime||""} · ${child.name}: ${p.title}</strong><small>${p.location||"Planning kind"}</small></div><span class="pill">Kind</span>
         </label>`).join("");
-        const carryRows=carry.filter(x=>!isDone("childcarry",`${child.id}-${x.id}`,today)).map(x=>`<label class="row task-row home-task-child ${isDone("childcarry",`${child.id}-${x.id}`,today)?"done":""}">
-          <input class="task-check" type="checkbox" data-home-child-carry="${child.id}|${x.id}" ${isDone("childcarry",`${child.id}-${x.id}`,today)?"checked":""}>
+        const carryRows=carry.filter(x=>!isDone("childcarry",`${child.id}-${x.id}`,today)).map(x=>`<label class="row task-row home-task-child">
+          <input class="task-check" type="checkbox" data-home-child-carry="${child.id}|${x.id}">
           <div class="row-main"><strong>${child.name}: ${x.text}</strong><small>Meenemen</small></div><span class="pill">Kind</span>
         </label>`).join("");
-        const routineRows=routines.filter(r=>!isDone("childroutine",`${child.id}-${r.id}`,today)).map(r=>`<label class="row task-row home-task-child ${isDone("childroutine",`${child.id}-${r.id}`,today)?"done":""}">
-          <input class="task-check" type="checkbox" data-home-child-routine="${child.id}|${r.id}" ${isDone("childroutine",`${child.id}-${r.id}`,today)?"checked":""}>
+        const routineRows=routines.filter(r=>!isDone("childroutine",`${child.id}-${r.id}`,today)).map(r=>`<label class="row task-row home-task-child">
+          <input class="task-check" type="checkbox" data-home-child-routine="${child.id}|${r.id}">
           <div class="row-main"><strong>${r.time?`${r.time} · `:""}${child.name}: ${r.title}</strong><small>Routine</small></div><span class="pill">Kind</span>
         </label>`).join("");
-        const mealRow=meal && !isDone("childmeal",child.id,today)?`<label class="row task-row home-task-child ${isDone("childmeal",child.id,today)?"done":""}">
-          <input class="task-check" type="checkbox" data-home-child-meal="${child.id}" ${isDone("childmeal",child.id,today)?"checked":""}>
+        const mealRow=meal&&!isDone("childmeal",child.id,today)?`<label class="row task-row home-task-child">
+          <input class="task-check" type="checkbox" data-home-child-meal="${child.id}">
           <div class="row-main"><strong>${child.name}: avondeten ${meal}</strong><small>Eten</small></div><span class="pill">Kind</span>
         </label>`:"";
-        const foodProgress=childFoodProgress(child,today);
-        const foodRow=`<button class="row home-task-child home-child-quick-add" type="button" data-home-child-food-open="${child.id}">
-          <div class="row-main"><strong>${child.name}: eten ${foodProgress.filled}/${foodProgress.total} ingevuld</strong><small>Tik om het eetoverzicht te openen</small></div><span class="pill">Kind</span>
-        </button>`;
-        return planRows+carryRows+routineRows+mealRow+foodRow;
+        return planRows+carryRows+routineRows+mealRow;
       }).join("")}
-      ${!appts.length && !cleaningToday.length && !childrenToday.some(x=>x.plans.length||x.carry.length||x.routines.length||x.food.length||x.meal) ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
+      ${!appts.length&&!cleaningToday.length&&!childrenToday.some(x=>x.plans.length||x.carry.length||x.routines.length||x.meal)?`<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
     </div>
-    <div class="section-title"><h3>Vertel LUMI</h3></div>
-    <div class="fab-row">
-      <button class="action-btn" data-go="profile">Profiel aanpassen</button>
-      <button class="action-btn" data-add="expense">Uitgave</button>
-      <button class="action-btn" data-add="agenda">Afspraak</button>
-      <button class="action-btn" data-add="shopping">Boodschap</button>
-      <button class="action-btn" data-add="cleaning">Schoonmaak</button>
-    </div>`;
-}
 
+    <div class="home-status-grid">
+      <button class="click-card home-budget-widget" data-go="budget">
+        <small>Budget</small><strong>${euro(currentBudget.remaining)}</strong><span>beschikbaar deze maand</span>
+      </button>
+      <button class="click-card home-shopping-widget" data-go="shopping">
+        <small>Boodschappen</small><strong>${openShopping}</strong><span>${openShopping===1?"openstaand":"openstaand"}</span>
+      </button>
+    </div>
+
+    ${profile.childrenEnabled&&childrenToday.length?`<button class="click-card home-child-widget home-child-summary" data-go="children">
+      <small>Kinderen</small><strong>${childrenToday.map(x=>x.child.name).join(" · ")}</strong>
+      <span>${childrenToday.reduce((s,x)=>s+x.plans.length+x.carry.length+x.routines.length,0)} dingen vandaag</span>
+      <span class="go-label">Open kindoverzicht</span>
+    </button>`:""}
+  `;
+}
 
 function childrenPage(){
   const children=state.children||[];

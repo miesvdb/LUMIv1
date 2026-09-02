@@ -1076,3 +1076,47 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .lumi-insight-agenda{background:rgba(77,14,18,.065)}
 .lumi-insight-clean{background:rgba(165,188,214,.25)}
 .quick-add-head h3{font-family:Didot,"Bodoni MT","Times New Roman",serif}
+
+/* ===== Homepage correctie: één persoonlijke versie ===== */
+.home-main-hero{
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  overflow:hidden;
+  margin-bottom:14px;
+}
+.home-main-hero .home-hero-copy{position:relative;z-index:2;max-width:82%}
+.home-main-hero .home-hero-copy>small{
+  display:block;margin-bottom:5px;font-size:9px;font-weight:750;
+  text-transform:capitalize;opacity:.72;
+}
+.home-main-hero h2{
+  margin:0 0 8px;
+  font-family:Didot,"Bodoni MT","Times New Roman",serif;
+  font-size:clamp(27px,7.5vw,37px);line-height:1.03;letter-spacing:-.035em;
+}
+.home-main-hero p{max-width:34em;margin:0;line-height:1.5}
+.home-quick-add-blue{
+  position:relative;z-index:3;flex:0 0 40px;width:40px;height:40px;
+  background:rgba(255,255,255,.82);color:#4A2E27;
+  box-shadow:none;
+}
+.home-today-title{align-items:end}
+.home-today-title>div>small{font-size:8px;letter-spacing:.15em;font-weight:850;color:var(--muted)}
+.home-today-title h3{margin:2px 0 0}
+.home-status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.home-status-grid .click-card{min-height:105px;text-align:left}
+.home-status-grid .click-card small{display:block;font-size:9px;margin-bottom:7px}
+.home-status-grid .click-card strong{display:block;font-size:22px;line-height:1.1}
+.home-status-grid .click-card>span{display:block;margin-top:4px;font-size:9px;opacity:.72}
+.home-child-summary{margin-top:10px}
+@media(max-width:350px){.home-status-grid{grid-template-columns:1fr}}
+
+/* ===== Minder dubbel op Vandaag ===== */
+.home-main-hero-compact{padding-top:16px;padding-bottom:16px}
+.home-main-hero-compact h2{font-size:28px;margin-bottom:6px}
+.home-main-hero-compact p{max-width:30em}
+.lumi-assistant{padding-top:15px}
+.lumi-assistant-head h3{font-size:19px}
