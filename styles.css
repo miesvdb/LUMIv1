@@ -960,3 +960,119 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .more-profile .more-icon{background:rgba(35,24,21,.09);color:var(--lumi-java)}
 .agenda-today-btn{margin-left:auto}
 .forecast-card,.child-food-dashboard{box-shadow:var(--shadow-soft)}
+
+/* ===== LUMI professionele homepage ===== */
+.home-professional-summary{
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  padding:10px 2px 18px;
+}
+.home-greeting{min-width:0}
+.home-greeting small{
+  display:block;
+  margin-bottom:5px;
+  font-size:10px;
+  font-weight:750;
+  color:var(--muted);
+  text-transform:capitalize;
+}
+.home-greeting h2{
+  margin:0;
+  font-family:Didot,"Bodoni MT","Bodoni 72","Times New Roman",serif;
+  font-size:clamp(29px,8vw,39px);
+  line-height:1.02;
+  letter-spacing:-.035em;
+  color:var(--lumi-java,#231815);
+}
+.home-greeting p{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.home-quick-add{
+  flex:0 0 42px;width:42px;height:42px;
+  border:0;border-radius:50%;
+  background:var(--lumi-java,#231815);color:#fff;
+  font-size:25px;font-weight:300;line-height:1;
+  box-shadow:0 8px 22px rgba(35,24,21,.14);
+}
+.home-next-card{
+  width:100%;border:0;border-radius:18px;
+  padding:14px 15px;margin:0 0 18px;
+  display:grid;grid-template-columns:1fr auto;gap:6px 12px;
+  background:var(--lumi-burgundy,#4D0E12);color:#fff;text-align:left;
+  box-shadow:0 9px 26px rgba(77,14,18,.13);
+}
+.home-next-card>small{grid-column:1/-1;font-size:9px;letter-spacing:.08em;text-transform:uppercase;opacity:.72}
+.home-next-card>div{display:flex;gap:12px;align-items:baseline}
+.home-next-card>div strong{font-size:13px}.home-next-card>div span{font-size:13px}
+.home-next-card>b{grid-column:2;grid-row:2;font-size:21px;font-weight:300;opacity:.7}
+.home-section-label{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:4px 2px 10px}
+.home-section-label span{
+  font-family:Didot,"Bodoni MT","Times New Roman",serif;
+  font-size:20px;font-weight:700;
+}
+.home-section-label small{font-size:9px;color:var(--muted)}
+/* Homepage: minder visuele ruis */
+.home-professional-summary~.card{box-shadow:none}
+.task-row{border-color:rgba(35,24,21,.07)!important}
+/* Snel toevoegen */
+.quick-add-overlay{
+  position:fixed;inset:0;z-index:2000;
+  display:flex;align-items:flex-end;
+  background:rgba(35,24,21,.28);
+  padding:12px;
+}
+.quick-add-sheet{
+  width:min(100%,620px);margin:0 auto;
+  background:#fffdf8;border-radius:26px 26px 18px 18px;
+  padding:18px;
+  box-shadow:0 -16px 50px rgba(35,24,21,.16);
+}
+.quick-add-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:15px}
+.quick-add-head small{font-size:9px;letter-spacing:.18em;color:var(--muted);font-weight:800}
+.quick-add-head h3{margin:2px 0 0;font-size:24px}
+.quick-add-head>button{border:0;background:#f2eee8;width:34px;height:34px;border-radius:50%;font-size:20px}
+.quick-add-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.quick-add-grid button{
+  border:1px solid rgba(35,24,21,.08);background:#fff;
+  border-radius:15px;padding:13px;text-align:left;display:grid;gap:3px;color:inherit;
+}
+.quick-add-grid strong{font-size:13px}.quick-add-grid small{font-size:9px;color:var(--muted)}
+@media(max-width:360px){.quick-add-grid{grid-template-columns:1fr}}
+
+/* ===== LUMI persoonlijke assistentlaag ===== */
+.lumi-assistant{
+  margin:0 0 22px;
+  padding:18px;
+  border-radius:22px;
+  background:#fffdf8;
+  border:1px solid rgba(35,24,21,.07);
+  box-shadow:0 10px 32px rgba(35,24,21,.055);
+}
+.lumi-assistant-head small{
+  display:block;font-size:8px;letter-spacing:.18em;font-weight:850;
+  color:var(--lumi-burgundy,#4D0E12);margin-bottom:4px;
+}
+.lumi-assistant-head h3{
+  margin:0;font-family:Didot,"Bodoni MT","Times New Roman",serif;
+  font-size:21px;letter-spacing:-.02em;
+}
+.lumi-assistant-intro{
+  margin:9px 0 15px;color:#655650;font-size:12px;line-height:1.55;
+}
+.lumi-insight-list{display:grid;gap:8px}
+.lumi-insight{
+  width:100%;border:0;border-radius:15px;padding:12px 13px;
+  display:grid;grid-template-columns:1fr auto;gap:8px 12px;
+  text-align:left;color:inherit;background:#f7f3ed;
+}
+.lumi-insight-copy{display:grid;gap:2px}
+.lumi-insight-copy small{font-size:8px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:800}
+.lumi-insight-copy strong{font-size:13px;line-height:1.25}
+.lumi-insight-copy>span{font-size:9px;color:var(--muted);line-height:1.35}
+.lumi-insight-action{align-self:center;font-size:9px;font-weight:750;white-space:nowrap}
+.lumi-insight-meal{background:rgba(245,239,198,.55)}
+.lumi-insight-budget{background:rgba(74,46,39,.07)}
+.lumi-insight-agenda{background:rgba(77,14,18,.065)}
+.lumi-insight-clean{background:rgba(165,188,214,.25)}
+.quick-add-head h3{font-family:Didot,"Bodoni MT","Times New Roman",serif}

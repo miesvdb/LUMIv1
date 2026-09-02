@@ -386,15 +386,92 @@ function render(){
   ensureChildrenNav();
   document.documentElement.style.setProperty("--active", COLORS[currentPage]||COLORS.home);
   todayLabel.textContent = dateNL();
-  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===currentPage || (currentPage==="shopping" && b.dataset.page==="meals")));
-  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema",children:"Kinderen",profile:"Profiel"};
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",
+    b.dataset.page===currentPage ||
+    (currentPage==="shopping" && b.dataset.page==="meals") ||
+    (["cleaning","children","profile"].includes(currentPage) && b.dataset.page==="more")
+  ));
+  const titleMap={home:"Lumi",budget:"Budget",meals:"Maaltijdplanner",shopping:"Boodschappenlijst",agenda:"Agenda",cleaning:"Schoonmaakschema",children:"Kinderen",more:"Meer",profile:"Profiel"};
   pageTitle.textContent = titleMap[currentPage]||"Lumi";
   const pages={home:homePage,budget:budgetPage,meals:mealsPage,shopping:shoppingPage,agenda:agendaPage,cleaning:cleaningPage,children:childrenPage,more:morePage,profile:profilePage};
   content.innerHTML = (pages[currentPage]||homePage)();
   bindPageEvents();
 }
 
+
+function lumiAssistantInsights(){
+  const today=todayISO();
+  const tomorrow=isoLocal(new Date(new Date(today+"T12:00:00").getTime()+86400000));
+  const now=new Date();
+  const agendaToday=(state.agenda||[]).filter(a=>a.date===today&&!isDone("agenda",a.id));
+  const agendaTomorrow=(state.agenda||[]).filter(a=>a.date===tomorrow&&!isDone("agenda",a.id));
+  const timedToday=agendaToday.filter(a=>!a.allDay&&a.startTime).sort((a,b)=>(a.startTime||"").localeCompare(b.startTime||""));
+  const first=timedToday[0];
+  let cleaningToday=[];
+  try{cleaningToday=(state.cleaning||[]).filter(t=>cleaningDueOn(t,today)&&!isDone("clean",t.id));}catch(e){}
+  const mealDay=new Date(today+"T12:00:00").toLocaleDateString("nl-NL",{weekday:"long"}).toLowerCase();
+  let dinner="";
+  try{
+    const meal=state.meals?.[mealDay]||state.mealPlan?.[mealDay]||"";
+    dinner=typeof meal==="string"?meal:(meal?.dinner||meal?.meal||meal?.title||"");
+  }catch(e){}
+  let budget=null;
+  try{budget=budgetTotals(today.slice(0,7));}catch(e){}
+  const shoppingOpen=(state.shopping||[]).filter(x=>!x.done).length;
+
+  let intro="";
+  const load=agendaToday.length+cleaningToday.length;
+  if(load===0) intro="Je dag is rustig. Er staat op dit moment niets dringends gepland.";
+  else if(load<=3) intro=`Vandaag is overzichtelijk. Je hebt ${load} ${load===1?"ding":"dingen"} die aandacht vragen.`;
+  else intro=`Vandaag is wat voller. Er staan ${load} dingen voor je klaar, dus LUMI houdt de belangrijkste bovenaan.`;
+  if(first) intro+=` Je eerste afspraak is om ${first.startTime}.`;
+
+  const insights=[];
+  if(!dinner){
+    insights.push({tone:"meal",eyebrow:"Vanavond",title:"Nog geen avondeten gepland",text:"Je kunt nu alvast iets kiezen, dan is dat later uit je hoofd.",action:"Maaltijd plannen",go:"meals"});
+  } else {
+    insights.push({tone:"meal",eyebrow:"Vanavond",title:dinner,text:shoppingOpen?`Er staan nog ${shoppingOpen} boodschappen open.`:"Je boodschappenlijst is op dit moment leeg.",action:"Bekijk maaltijd",go:"meals"});
+  }
+  if(budget){
+    const remaining=Number(budget.remaining||0);
+    insights.push({
+      tone:"budget",eyebrow:"Budget",
+      title:remaining>=0?`${euro(remaining)} beschikbaar`:`${euro(Math.abs(remaining))} boven je ruimte`,
+      text:remaining>=0?"Na vaste lasten, uitgaven en je gereserveerde spaardoel.":"Kijk even naar je uitgaven en planning voor deze maand.",
+      action:"Bekijk budget",go:"budget"
+    });
+  }
+  if(agendaTomorrow.length){
+    const early=agendaTomorrow.filter(a=>a.startTime&&a.startTime<"09:00").sort((a,b)=>a.startTime.localeCompare(b.startTime))[0];
+    insights.push({tone:"agenda",eyebrow:"Morgen",title:`${agendaTomorrow.length} ${agendaTomorrow.length===1?"afspraak":"afspraken"} gepland`,text:early?`Je begint vroeg: de eerste afspraak is om ${early.startTime}.`:"Je agenda voor morgen staat al klaar.",action:"Bekijk agenda",go:"agenda"});
+  }
+  if(cleaningToday.length){
+    insights.push({tone:"clean",eyebrow:"Thuis",title:`${cleaningToday.length} ${cleaningToday.length===1?"schoonmaaktaak":"schoonmaaktaken"} vandaag`,text:"Alleen wat voor vandaag gepland staat wordt hier naar voren gehaald.",action:"Bekijk taken",go:"cleaning"});
+  }
+  return {intro,insights:insights.slice(0,3)};
+}
+
+function lumiAssistantBlock(){
+  const data=lumiAssistantInsights();
+  return `<section class="lumi-assistant">
+    <div class="lumi-assistant-head">
+      <div><small>LUMI VOOR JOU</small><h3>Dit is handig om te weten</h3></div>
+    </div>
+    <p class="lumi-assistant-intro">${data.intro}</p>
+    ${data.insights.length?`<div class="lumi-insight-list">${data.insights.map(i=>`
+      <button type="button" class="lumi-insight lumi-insight-${i.tone}" data-go="${i.go}">
+        <span class="lumi-insight-copy"><small>${i.eyebrow}</small><strong>${i.title}</strong><span>${i.text}</span></span>
+        <span class="lumi-insight-action">${i.action} ›</span>
+      </button>`).join("")}</div>`:""}
+  </section>`;
+}
+
 function homePage(){
+  const homeToday=todayISO();
+  const homeDate=new Date(homeToday+"T12:00:00");
+  const hourNow=new Date().getHours();
+  const greeting=hourNow<12?"Goedemorgen":hourNow<18?"Goedemiddag":"Goedenavond";
+
   const today = todayISO();
   const appts = state.agenda.filter(a=>a.date===today).sort((a,b)=>(a.startTime||"00:00").localeCompare(b.startTime||"00:00"));
   const cleaningToday = state.cleaning.filter(x=>cleanDueOn(x,new Date()));
@@ -413,7 +490,32 @@ function homePage(){
 
   const taskRow=(kind,id,title,sub,color)=>{
     if(isDone(kind,id)) return "";
-    return `<label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"}">
+    
+  const homeName=(profile.name||"").trim();
+  const agendaToday=(state.agenda||[]).filter(a=>a.date===homeToday);
+  const openAgendaToday=agendaToday.filter(a=>!isDone("agenda",a.id)).length;
+  const dueCleaningToday=(state.cleaning||[]).filter(t=>{
+    try{return cleaningDueOn(t,homeToday)&&!isDone("clean",t.id);}catch(e){return false;}
+  }).length;
+  const homeOpenCount=openAgendaToday+dueCleaningToday;
+  const firstTimed=agendaToday.filter(a=>!isDone("agenda",a.id)&&!a.allDay&&a.startTime).sort((a,b)=>(a.startTime||"").localeCompare(b.startTime||""))[0];
+  const homeSummary=`${homeOpenCount} ${homeOpenCount===1?"ding":"dingen"} vandaag${firstTimed?` · eerste afspraak ${firstTimed.startTime}`:""}`;
+
+  return `<section class="home-professional-summary">
+    <div class="home-greeting">
+      <small>${homeDate.toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long"})}</small>
+      <h2>${greeting}${homeName?`, ${homeName}`:""}</h2>
+      <p>${homeSummary}</p>
+    </div>
+    <button type="button" class="home-quick-add" data-home-quick-add aria-label="Vertel LUMI">+</button>
+  </section>
+  ${firstTimed?`<button type="button" class="home-next-card" data-go="agenda">
+    <small>Eerstvolgende</small>
+    <div><strong>${firstTimed.startTime}${firstTimed.endTime?` – ${firstTimed.endTime}`:""}</strong><span>${firstTimed.title||"Afspraak"}</span></div>
+    <b>›</b>
+  </button>`:""}
+  ${lumiAssistantBlock()}<div class="home-section-label"><span>Vandaag</span><small>Wat nu aandacht vraagt</small></div>
+  <label class="row task-row home-task-${kind==="agenda"?"agenda":kind==="meal"?"meal":"clean"}">
       <input class="task-check" type="checkbox" data-home-task="${kind}" data-task-id="${id}">
       <div class="row-main"><strong>${title}</strong><small>${sub}</small></div><span class="pill">Vandaag</span>
     </label>`;
@@ -471,7 +573,7 @@ function homePage(){
       }).join("")}
       ${!appts.length && !cleaningToday.length && !childrenToday.some(x=>x.plans.length||x.carry.length||x.routines.length||x.food.length||x.meal) ? `<div class="empty">Geen extra taken gepland voor vandaag.</div>`:""}
     </div>
-    <div class="section-title"><h3>Snel toevoegen</h3></div>
+    <div class="section-title"><h3>Vertel LUMI</h3></div>
     <div class="fab-row">
       <button class="action-btn" data-go="profile">Profiel aanpassen</button>
       <button class="action-btn" data-add="expense">Uitgave</button>
@@ -1167,7 +1269,44 @@ function cleaningPage(){
 }
 function row(color,icon,title,sub){return `<div class="row"><span style="width:5px;height:38px;border-radius:99px;background:${color}"></span><div class="row-main"><strong>${title}</strong><small>${sub}</small></div></div>`}
 
+
+function openQuickAdd(){
+  const existing=document.getElementById("quickAddSheet");
+  if(existing) existing.remove();
+  const wrap=document.createElement("div");
+  wrap.id="quickAddSheet";
+  wrap.className="quick-add-overlay";
+  wrap.innerHTML=`<div class="quick-add-sheet">
+    <div class="quick-add-head"><div><small>LUMI</small><h3>Snel toevoegen</h3></div><button type="button" data-close-quick>×</button></div>
+    <div class="quick-add-grid">
+      <button type="button" data-quick="agenda"><strong>Afspraak</strong><small>LUMI zet hem in je agenda</small></button>
+      <button type="button" data-quick="budget"><strong>Uitgave</strong><small>LUMI brengt je naar Budget</small></button>
+      <button type="button" data-quick="shopping"><strong>Boodschap</strong><small>LUMI brengt je naar je lijst</small></button>
+      <button type="button" data-quick="meal"><strong>Maaltijd</strong><small>Plan voor vandaag</small></button>
+      <button type="button" data-quick="cleaning"><strong>Schoonmaak</strong><small>Nieuwe taak</small></button>
+      ${profile.childrenEnabled?`<button type="button" data-quick="children"><strong>Kind</strong><small>Planning of routine</small></button>`:""}
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector("[data-close-quick]").onclick=close;
+  wrap.onclick=e=>{if(e.target===wrap)close();};
+  wrap.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{
+    const kind=b.dataset.quick;
+    close();
+    if(kind==="agenda") return openModal("agenda",todayISO());
+    if(kind==="cleaning") return openModal("cleaning");
+    if(kind==="budget"){currentPage="budget";render();return;}
+    if(kind==="shopping"){currentPage="shopping";render();return;}
+    if(kind==="meal"){currentPage="meals";render();return;}
+    if(kind==="children"){currentPage="children";render();return;}
+  });
+}
+
 function bindPageEvents(){
+  const quickAdd=document.querySelector("[data-home-quick-add]");
+  if(quickAdd) quickAdd.onclick=openQuickAdd;
+
   const savingsGoalForm=document.getElementById("savingsGoalForm");
   if(savingsGoalForm){
     savingsGoalForm.onsubmit=(e)=>{
@@ -1385,6 +1524,10 @@ function bindPageEvents(){
   document.querySelectorAll("[data-agenda-done]").forEach(c=>c.onchange=()=>{setDone("agenda",c.dataset.agendaDone,c.checked,c.dataset.agendaDate);render();});
   document.querySelectorAll("[data-edit-clean]").forEach(b=>b.onclick=()=>openModal("cleanDays",Number(b.dataset.editClean)));
 
+  document.querySelectorAll("[data-more-page]").forEach(b=>b.onclick=()=>{
+    currentPage=b.dataset.morePage;
+    render();
+  });
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{currentPage=b.dataset.go;render();});
   document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>openModal(b.dataset.add));
   document.querySelectorAll("[data-expense-cat]").forEach(b=>b.onclick=()=>openModal("expense",Number(b.dataset.expenseCat)));
