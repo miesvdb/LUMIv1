@@ -78,6 +78,48 @@ function startOfWeek(d){
   x.setDate(x.getDate()-mondayOffset);
   return x;
 }
+
+let mealWeekCursor=startOfWeek(new Date());
+let selectedMealDate=null;
+
+function mealWeekKey(d){
+  return isoLocal(startOfWeek(d));
+}
+function isoWeekNumber(d){
+  const x=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=x.getUTCDay()||7;
+  x.setUTCDate(x.getUTCDate()+4-day);
+  const yearStart=new Date(Date.UTC(x.getUTCFullYear(),0,1));
+  return Math.ceil((((x-yearStart)/86400000)+1)/7);
+}
+function mealWeekDates(cursor=mealWeekCursor){
+  const start=startOfWeek(cursor);
+  return [...Array(7)].map((_,i)=>new Date(start.getFullYear(),start.getMonth(),start.getDate()+i,12));
+}
+function mealSettingsForWeek(cursor=mealWeekCursor){
+  state.mealWeekSettings=state.mealWeekSettings||{};
+  const key=mealWeekKey(cursor);
+  if(!state.mealWeekSettings[key]) state.mealWeekSettings[key]={Ontbijt:true,Lunch:true,Diner:true};
+  return state.mealWeekSettings[key];
+}
+function mealForDate(iso,slot){
+  state.mealPlanByDate=state.mealPlanByDate||{};
+  if(state.mealPlanByDate[iso] && state.mealPlanByDate[iso][slot]!==undefined) return state.mealPlanByDate[iso][slot]||"";
+  const d=dateObj(iso);
+  return state.meals?.[DAY_NAMES[d.getDay()]]?.[slot]||"";
+}
+function setMealForDate(iso,slot,value){
+  state.mealPlanByDate=state.mealPlanByDate||{};
+  state.mealPlanByDate[iso]=state.mealPlanByDate[iso]||{};
+  state.mealPlanByDate[iso][slot]=(value||"").trim();
+}
+function mealWeekRangeLabel(cursor=mealWeekCursor){
+  const ds=mealWeekDates(cursor), a=ds[0], b=ds[6];
+  const sameMonth=a.getMonth()===b.getMonth();
+  return sameMonth
+    ? `${a.getDate()} – ${b.getDate()} ${b.toLocaleDateString("nl-NL",{month:"long"})}`
+    : `${a.getDate()} ${a.toLocaleDateString("nl-NL",{month:"short"})} – ${b.getDate()} ${b.toLocaleDateString("nl-NL",{month:"short"})}`;
+}
 function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
 function cleanDueOn(task, d=new Date()){
   const iso=isoLocal(d);
@@ -350,6 +392,17 @@ function migrateState(){
   state.savingsForecast.openingBalance=Math.max(0,Number(state.savingsForecast.openingBalance||0));
   state.children=Array.isArray(state.children)?state.children.map(normalizeChild):[];
   state.mealIngredients=state.mealIngredients && typeof state.mealIngredients==="object" ? state.mealIngredients : {};
+  state.mealPlanByDate=state.mealPlanByDate && typeof state.mealPlanByDate==="object" ? state.mealPlanByDate : {};
+  state.mealWeekSettings=state.mealWeekSettings && typeof state.mealWeekSettings==="object" ? state.mealWeekSettings : {};
+  if((state.mealPlannerSchemaVersion||0)<2){
+    const thisWeek=startOfWeek(new Date());
+    [...Array(7)].forEach((_,i)=>{
+      const d=new Date(thisWeek.getFullYear(),thisWeek.getMonth(),thisWeek.getDate()+i,12);
+      const iso=isoLocal(d), legacy=state.meals?.[DAY_NAMES[d.getDay()]];
+      if(legacy && !state.mealPlanByDate[iso]) state.mealPlanByDate[iso]={...legacy};
+    });
+    state.mealPlannerSchemaVersion=2;
+  }
   state.shopping=Array.isArray(state.shopping)?state.shopping:[];
   state.shopping=state.shopping.map((x,i)=>typeof x==="string"?{id:Date.now()+i,text:x,done:false}:{id:x.id||Date.now()+i,text:x.text||"",done:!!x.done});
 
@@ -400,12 +453,7 @@ function render(){
 
 
 function lumiDinnerForDate(iso){
-  const d=new Date(iso+"T12:00:00");
-  const days=["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
-  const entry=state.meals?.[days[d.getDay()]];
-  if(!entry) return "";
-  if(typeof entry==="string") return entry;
-  return entry.Diner||entry.dinner||entry.Avondeten||entry.avondeten||entry.meal||entry.title||"";
+  return mealForDate(iso,"Diner");
 }
 
 function lumiAssistantInsights(){
@@ -434,17 +482,10 @@ function lumiAssistantInsights(){
   const insights=[];
   if(!dinner){
     insights.push({tone:"meal",eyebrow:"Vanavond",title:"Nog geen avondeten gepland",text:"Je kunt nu alvast iets kiezen, dan is dat later uit je hoofd.",action:"Maaltijd plannen",go:"meals"});
-  } else {
-    insights.push({tone:"meal",eyebrow:"Vanavond",title:dinner,text:shoppingOpen?`Er staan nog ${shoppingOpen} boodschappen open.`:"Je boodschappenlijst is op dit moment leeg.",action:"Bekijk maaltijd",go:"meals"});
   }
-  if(budget){
+  if(budget && Number(budget.remaining||0)<0){
     const remaining=Number(budget.remaining||0);
-    insights.push({
-      tone:"budget",eyebrow:"Budget",
-      title:remaining>=0?`${euro(remaining)} beschikbaar`:`${euro(Math.abs(remaining))} boven je ruimte`,
-      text:remaining>=0?"Na vaste lasten, uitgaven en je gereserveerde spaardoel.":"Kijk even naar je uitgaven en planning voor deze maand.",
-      action:"Bekijk budget",go:"budget"
-    });
+    insights.push({tone:"budget",eyebrow:"Budget",title:`${euro(Math.abs(remaining))} boven je ruimte`,text:"Kijk even naar je uitgaven en planning voor deze maand.",action:"Bekijk budget",go:"budget"});
   }
   if(agendaTomorrow.length){
     const early=agendaTomorrow.filter(a=>a.startTime&&a.startTime<"09:00").sort((a,b)=>a.startTime.localeCompare(b.startTime))[0];
@@ -714,7 +755,7 @@ function morePage(){
     <div class="more-grid">
       <button class="more-card more-clean" type="button" data-more-page="cleaning"><span class="more-icon">S</span><span><strong>Schoonmaak</strong><small>Taken, ruimtes en planning</small></span><b>›</b></button>
       ${profile.childrenEnabled?`<button class="more-card more-child" type="button" data-more-page="children"><span class="more-icon">K</span><span><strong>Kinderen</strong><small>Planning, eten, meenemen en routines</small></span><b>›</b></button>`:""}
-      <button class="more-card more-profile" type="button" data-more-page="profile"><span class="more-icon">P</span><span><strong>Profiel & instellingen</strong><small>Persoonlijk, huishouden en back-up</small></span><b>›</b></button>
+      <button class="more-card more-profile" type="button" data-more-page="profile"><span class="more-icon">P</span><span><strong>Jouw LUMI</strong><small>Persoonlijk, huishouden en back-up</small></span><b>›</b></button>
     </div>
   </div>`;
 }
@@ -1084,47 +1125,88 @@ function budgetChart(){
 }
 
 function mealsPage(){
+  const dates=mealWeekDates(), settings=mealSettingsForWeek();
+  const active=["Ontbijt","Lunch","Diner"].filter(s=>settings[s]);
+  const currentWeek=mealWeekKey(mealWeekCursor)===mealWeekKey(new Date());
+
+  if(selectedMealDate){
+    const d=dateObj(selectedMealDate);
+    const inShownWeek=mealWeekKey(d)===mealWeekKey(mealWeekCursor);
+    if(!inShownWeek) selectedMealDate=null;
+  }
+
+  if(selectedMealDate){
+    const d=dateObj(selectedMealDate);
+    return `
+      <section class="hero theme-orange meal-day-hero">
+        <button class="meal-back" type="button" data-meal-back>‹ Week ${isoWeekNumber(mealWeekCursor)}</button>
+        <h2>${d.toLocaleDateString("nl-NL",{weekday:"long"})}</h2>
+        <p>${d.toLocaleDateString("nl-NL",{day:"numeric",month:"long",year:"numeric"})}</p>
+        <div class="decor-letter">M</div>
+      </section>
+      <div class="meal-day-editor">
+        <div class="section-title"><div><small>DAGPLANNING</small><h3>Maaltijden</h3></div></div>
+        ${active.length?active.map(slot=>`
+          <label class="meal-edit-card">
+            <small>${slot}</small>
+            <input type="text" data-meal-day-input="${slot}" value="${mealForDate(selectedMealDate,slot)}" placeholder="${slot} nog niet gepland">
+          </label>`).join(""):`<div class="empty">Voor deze week staan geen maaltijdmomenten aan. Ga terug naar de week om er één aan te zetten.</div>`}
+        ${active.length?`<button class="action-btn meal-save-day" type="button" data-save-meal-day>Dag opslaan</button>`:""}
+      </div>`;
+  }
+
   return `
-    <section class="hero theme-orange">
+    <section class="hero theme-orange meal-week-hero">
       <h2>Maaltijd<span class="brand-script">planner</span></h2>
-      <p>Plan je week en houd je boodschappen automatisch bij. ${profileMealHint()}.</p>
+      <p>Plan alleen wat jij deze week nodig hebt. ${profileMealHint()}.</p>
       <div class="decor-letter">M</div>
     </section>
-    <div class="section-title"><h3>Vandaag</h3></div>
-    <label class="row task-row ${isDone("meal","dinner")?"done":""}">
-      <input class="task-check" type="checkbox" data-meal-done="dinner" ${isDone("meal","dinner")?"checked":""}>
-      <button class="row-main meal-today-link" type="button" data-meal-shopping="${todayName()}|Diner"><strong>Diner</strong><small>${state.meals[todayName()]?.Diner || "Nog niet gepland"}</small></button>
-      <span class="pill">${isDone("meal","dinner")?"Gedaan":"Vandaag"}</span>
-    </label>
-    <div class="card meal-profile-card"><strong>Afgestemd op jouw profiel</strong><p>${profileMealHint()}. Op ${Math.max(0,7-(profile.workDays||[]).length)} vrije dag(en) kun je eventueel iets uitgebreider koken. Je ingrediënten worden per maaltijd bewaard.</p></div>
-    <div class="section-title"><h3>Deze week</h3><button class="link-btn" data-add="meal">bewerken</button></div>
-    <div class="card">
-      ${Object.entries(state.meals).map(([day,slots])=>`
-        <div class="meal-day">
-          <div class="day">${day.slice(0,2)}</div>
-          <div>
-            ${Object.entries(slots).map(([slot,val])=>`<button class="meal-slot meal-to-shopping" type="button" data-meal-shopping="${day}|${slot}"><small>${slot}</small><span>${val}</span><em>Naar boodschappenlijst</em></button>`).join("")}
-          </div>
-        </div>`).join("")}
+
+    <div class="meal-week-nav">
+      <button type="button" data-meal-week="-1" aria-label="Vorige week">‹</button>
+      <div><small>WEEK ${isoWeekNumber(mealWeekCursor)}</small><strong>${mealWeekRangeLabel()}</strong></div>
+      <button type="button" data-meal-week="1" aria-label="Volgende week">›</button>
     </div>
+    ${!currentWeek?`<button type="button" class="meal-current-week" data-meal-current>Deze week</button>`:""}
+
+    <section class="meal-week-settings">
+      <div><small>DEZE WEEK PLAN IK</small><strong>Kies wat je wilt zien</strong></div>
+      <div class="meal-toggle-row">
+        ${["Ontbijt","Lunch","Diner"].map(slot=>`<button type="button" class="meal-toggle ${settings[slot]?"active":""}" data-meal-toggle="${slot}" aria-pressed="${settings[slot]}">${slot}</button>`).join("")}
+      </div>
+    </section>
+
+    <div class="meal-week-days">
+      ${dates.map(d=>{
+        const iso=isoLocal(d), isToday=iso===todayISO();
+        return `<button type="button" class="meal-day-card ${isToday?"today":""}" data-meal-date="${iso}">
+          <div class="meal-day-date"><small>${d.toLocaleDateString("nl-NL",{weekday:"short"}).replace(".","")}</small><strong>${d.getDate()}</strong>${isToday?`<span>Vandaag</span>`:""}</div>
+          <div class="meal-day-slots">
+            ${active.length?active.map(slot=>`<div><small>${slot}</small><span class="${mealForDate(iso,slot)?"":"empty-meal"}">${mealForDate(iso,slot)||"Nog niet gepland"}</span></div>`).join(""):`<span class="empty-meal">Geen maaltijdmomenten actief</span>`}
+          </div>
+          <span class="meal-day-arrow">›</span>
+        </button>`;
+      }).join("")}
+    </div>
+
     ${profile.childrenEnabled && (state.children||[]).length?`<div class="section-title"><h3>Kinderen</h3><button class="link-btn" data-go="children">open kindplanning</button></div><div class="card child-meals-summary">${(state.children||[]).map(c=>`<div><strong>${c.name}</strong><small>Vandaag: ${childMealForDay(c,todayName())||"nog niet apart gepland"}</small></div>`).join("")}</div>`:""}
-    <div class="section-title"><h3>Boodschappenlijst</h3><button class="link-btn" data-add="shopping">＋ item</button></div>
-    <div class="list">
-      ${state.shopping.length?state.shopping.slice().sort((a,b)=>Number(a.done)-Number(b.done)).map((x)=>`<div class="row shopping-row ${x.done?"done":""}"><input class="task-check" type="checkbox" data-shopping-done="${x.id}" ${x.done?"checked":""}><div class="row-main"><strong>${shoppingItemText(x)}</strong></div><div class="shopping-actions"><button class="link-btn" data-edit-shopping="${x.id}">bewerk</button><button class="link-btn" data-remove-shopping="${x.id}">verwijder</button></div></div>`).join(""):`<div class="empty">Je lijst is leeg.</div>`}
+
+    <div class="meal-shopping-separate">
+      <div class="section-title"><div><small>LOS VAN JE MAALTIJDEN</small><h3>Boodschappenlijst</h3></div><button class="link-btn" data-add="shopping">＋ item</button></div>
+      <div class="list">
+        ${state.shopping.length?state.shopping.slice().sort((a,b)=>Number(a.done)-Number(b.done)).map(x=>`<div class="row shopping-row ${x.done?"done":""}"><input class="task-check" type="checkbox" data-shopping-done="${x.id}" ${x.done?"checked":""}><div class="row-main"><strong>${shoppingItemText(x)}</strong></div><div class="shopping-actions"><button class="link-btn" data-edit-shopping="${x.id}">bewerk</button><button class="link-btn" data-remove-shopping="${x.id}">verwijder</button></div></div>`).join(""):`<div class="empty">Je boodschappenlijst is leeg.</div>`}
+      </div>
     </div>`;
 }
 
 function shoppingPage(){
-  let mealContext=null;
-  try{ mealContext=JSON.parse(sessionStorage.getItem("lumiMealShoppingContext")||"null"); }catch(e){}
   return `
     <section class="hero theme-orange">
       <h2>Boodschappen<span class="brand-script">lijst</span></h2>
-      <p>${state.shopping.length} artikelen voor vandaag.</p>
+      <p>Je eigen boodschappenlijst, los van je maaltijdplanning.</p>
       <div class="decor-letter">B</div>
     </section>
-    ${mealContext?`<div class="card meal-shopping-context"><small>${mealContext.day} · ${mealContext.slot}</small><strong>${mealContext.meal||"Maaltijd"}</strong><p>${profileMealHint()}</p>${getMealIngredients(mealContext.day,mealContext.slot).length?`<div class="ingredient-chips">${getMealIngredients(mealContext.day,mealContext.slot).map(x=>`<span>${x}</span>`).join("")}</div><button class="action-btn" type="button" data-add-meal-ingredients="${mealContext.day}|${mealContext.slot}">Ingrediënten toevoegen aan lijst</button>`:`<p class="subtle">Nog geen ingrediënten opgeslagen. Bewerk de maaltijd om ingrediënten toe te voegen.</p>`}<button class="link-btn" type="button" data-clear-meal-context>Sluiten</button></div>`:""}
-    <div class="section-title"><h3>Vandaag</h3><button class="link-btn" data-add="shopping">Item toevoegen</button></div>
+    <div class="section-title"><h3>Mijn lijst</h3><button class="link-btn" data-add="shopping">Item toevoegen</button></div>
     <div class="list">
       ${state.shopping.length?state.shopping.slice().sort((a,b)=>Number(a.done)-Number(b.done)).map((x)=>`<div class="row shopping-row ${x.done?"done":""}"><input class="task-check" type="checkbox" data-shopping-done="${x.id}" ${x.done?"checked":""}><div class="row-main"><strong>${shoppingItemText(x)}</strong></div><div class="shopping-actions"><button class="link-btn" data-edit-shopping="${x.id}">bewerk</button><button class="link-btn" data-remove-shopping="${x.id}">verwijder</button></div></div>`).join(""):`<div class="empty">Je boodschappenlijst is leeg.</div>`}
     </div>
@@ -1511,13 +1593,22 @@ function bindPageEvents(){
     card.onkeydown=(e)=>{ if(e.key==="Enter" || e.key===" "){ e.preventDefault(); openModal("budgetCategory",Number(card.dataset.openCategory)); } };
   });
   document.querySelectorAll("[data-adjust-budget]").forEach(b=>b.onclick=()=>openModal("budgetAdjust",b.dataset.adjustBudget));
-  document.querySelectorAll("[data-meal-shopping]").forEach(b=>b.onclick=(e)=>{
-    e.preventDefault();
-    e.stopPropagation();
-    const [day,slot]=b.dataset.mealShopping.split("|");
-    sessionStorage.setItem("lumiMealShoppingContext",JSON.stringify({day,slot,meal:state.meals[day]?.[slot]||""}));
-    currentPage="shopping";
-    render();
+  document.querySelectorAll("[data-meal-week]").forEach(b=>b.onclick=()=>{
+    const dir=Number(b.dataset.mealWeek);
+    mealWeekCursor=new Date(mealWeekCursor.getFullYear(),mealWeekCursor.getMonth(),mealWeekCursor.getDate()+dir*7,12);
+    selectedMealDate=null; render();
+  });
+  document.querySelectorAll("[data-meal-current]").forEach(b=>b.onclick=()=>{mealWeekCursor=startOfWeek(new Date());selectedMealDate=null;render();});
+  document.querySelectorAll("[data-meal-toggle]").forEach(b=>b.onclick=()=>{
+    const settings=mealSettingsForWeek();
+    settings[b.dataset.mealToggle]=!settings[b.dataset.mealToggle];
+    save(); render();
+  });
+  document.querySelectorAll("[data-meal-date]").forEach(b=>b.onclick=()=>{selectedMealDate=b.dataset.mealDate;render();});
+  document.querySelectorAll("[data-meal-back]").forEach(b=>b.onclick=()=>{selectedMealDate=null;render();});
+  document.querySelectorAll("[data-save-meal-day]").forEach(b=>b.onclick=()=>{
+    document.querySelectorAll("[data-meal-day-input]").forEach(input=>setMealForDate(selectedMealDate,input.dataset.mealDayInput,input.value));
+    save(); render();
   });
   document.querySelectorAll("[data-edit-shopping]").forEach(b=>b.onclick=()=>openModal("editShopping",Number(b.dataset.editShopping)));
 
@@ -1529,15 +1620,6 @@ function bindPageEvents(){
     state.shopping=state.shopping.filter(x=>Number(x.id)!==Number(b.dataset.removeShopping));
     save();render();
   });
-  document.querySelectorAll("[data-add-meal-ingredients]").forEach(b=>b.onclick=()=>{
-    const [day,slot]=b.dataset.addMealIngredients.split("|");
-    const currentTexts=state.shopping.map(shoppingItemText).map(x=>x.toLowerCase());
-    getMealIngredients(day,slot).forEach(ing=>{
-      if(!currentTexts.includes(ing.toLowerCase())) state.shopping.push({id:Date.now()+Math.random(),text:ing,done:false});
-    });
-    save();render();
-  });
-  document.querySelectorAll("[data-clear-meal-context]").forEach(b=>b.onclick=()=>{sessionStorage.removeItem("lumiMealShoppingContext");render();});
   document.querySelectorAll("[data-edit-agenda]").forEach(b=>b.onclick=()=>openModal("agendaEdit",Number(b.dataset.editAgenda)));
   document.querySelectorAll("[data-delete-agenda]").forEach(b=>b.onclick=()=>{state.agenda=state.agenda.filter(a=>a.id!==Number(b.dataset.deleteAgenda));save();render();});
   document.querySelectorAll("[data-clean]").forEach(c=>c.onchange=()=>{setDone("clean",c.dataset.clean,c.checked);render();});
@@ -1688,7 +1770,7 @@ function openModal(type, catIndex=null){
       return `<div class="form-grid"><label>Taak<input id="fEditCleanTask" value="${task?.task||""}"></label><div id="editCleanRepeatFields"></div><button type="button" class="secondary danger-action" id="deleteCleanBtn">Taak verwijderen</button></div>`;
     })()},
     budgetcat:{title:"Budgetcategorie toevoegen",html:`<div class="form-grid"><label>Naam<input id="fName" placeholder="Bijv. Kleding"></label><label>Maandbudget<input id="fLimit" type="number" min="0" step="1" placeholder="100"></label></div>`},
-    meal:{title:"Maaltijd bewerken",html:`<div class="form-grid"><p class="subtle">${profileMealHint()}</p><label>Dag<select id="fDay">${Object.keys(state.meals).map(d=>`<option>${d}</option>`).join("")}</select></label><label>Moment<select id="fSlot"><option>Ontbijt</option><option>Lunch</option><option>Diner</option></select></label><label>Maaltijd<input id="fMeal" placeholder="Bijv. pasta pesto"></label><label>Ingrediënten voor boodschappen<textarea id="fIngredients" rows="4" placeholder="Eén ingrediënt per regel"></textarea></label></div>`}
+    meal:{title:"Maaltijden van vandaag",html:`<div class="form-grid"><p class="subtle">Vul de actieve maaltijdmomenten voor vandaag in.</p>${["Ontbijt","Lunch","Diner"].filter(s=>mealSettingsForWeek(startOfWeek(new Date()))[s]).map(s=>`<label>${s}<input data-modal-meal="${s}" value="${mealForDate(todayISO(),s)}" placeholder="${s} nog niet gepland"></label>`).join("")}</div>`}
   };
   modalTitle.textContent=fields[type].title;
   modalBody.innerHTML=fields[type].html;
@@ -2002,9 +2084,7 @@ document.getElementById("modalForm").addEventListener("submit",e=>{
   }
   if(t==="budgetcat"){ const n=document.getElementById("fName").value.trim(); const l=Number(document.getElementById("fLimit").value||0); if(n)state.budgets.push({name:n,limit:l,spent:0}); }
   if(t==="meal"){
-    const d=document.getElementById("fDay").value,s=document.getElementById("fSlot").value,m=document.getElementById("fMeal").value.trim();
-    if(m) state.meals[d][s]=m;
-    setMealIngredients(d,s,document.getElementById("fIngredients").value.split("\n"));
+    document.querySelectorAll("[data-modal-meal]").forEach(input=>setMealForDate(todayISO(),input.dataset.modalMeal,input.value));
   }
   save(); modal.close(); render();
 });
